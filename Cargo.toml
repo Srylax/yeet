@@ -1,0 +1,3 @@
+[workspace]
+members = ["yeet-agent", "yeet-api", "yeet-server"]
+resolver = "2"

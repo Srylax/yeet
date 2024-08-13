@@ -1,0 +1,9 @@
+[package]
+name = "yeet-api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = { version = "0.4.38", features = ["serde"] }
+serde = { version = "1.0.204", features = ["derive"] }
+serde_with = { version = "3.9.0", features = ["chrono_0_4"] }
