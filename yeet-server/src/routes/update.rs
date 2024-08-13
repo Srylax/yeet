@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
 use axum::response::IntoResponse;
+use axum::Json;
 use parking_lot::RwLock;
 
-use yeet_api::{HostUpdateRequest, Version};
 use yeet_api::VersionStatus::NewVersionAvailable;
+use yeet_api::{HostUpdateRequest, Version};
 
-use crate::AppState;
 use crate::jwt::Claims;
+use crate::AppState;
 
 pub async fn update_hosts(
     State(state): State<Arc<RwLock<AppState>>>,
@@ -29,7 +29,7 @@ pub async fn update_hosts(
     if !invalid_hosts.is_empty() {
         return (
             StatusCode::NOT_FOUND,
-            format!("{:?} not registered", invalid_hosts),
+            format!("{invalid_hosts:?} not registered"),
         )
             .into_response();
     }

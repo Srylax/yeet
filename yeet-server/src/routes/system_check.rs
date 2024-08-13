@@ -3,16 +3,16 @@ use std::time::Instant;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use axum::response::IntoResponse;
+use axum::Json;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use yeet_api::VersionStatus::{NewVersionAvailable, UpToDate};
 
-use crate::AppState;
 use crate::jwt::NextJwt;
+use crate::AppState;
 
 #[derive(Serialize, Deserialize)]
 pub struct VersionRequest {
@@ -32,9 +32,9 @@ pub async fn system_check(
     };
 
     // If the client did the update
-    if let NewVersionAvailable(next_version) = &host.status {
+    if let NewVersionAvailable(ref next_version) = host.status {
         if next_version.store_path == store_path {
-            host.store_path = store_path.clone();
+            host.store_path.clone_from(&store_path);
             host.status = UpToDate;
         }
     }

@@ -2,9 +2,17 @@
 name = "yeet-server"
 version = "0.1.0"
 edition = "2021"
+categories = []
+keywords = ["nix", "deployment", "pull-based"]
+repository = "https://github.com/Srylax/yeet"
+license = "AGPL-3.0-or-later"
+readme = "README.MD"
+description = "Pull-based NixOs deployment server+agent"
 
-[profile.release]
-lto = true
+[lints]
+workspace = true
+
+
 
 [dependencies]
 anyhow = "1.0.86"

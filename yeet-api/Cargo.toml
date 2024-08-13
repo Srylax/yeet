@@ -2,6 +2,15 @@
 name = "yeet-api"
 version = "0.1.0"
 edition = "2021"
+categories = []
+keywords = ["nix", "deployment", "pull-based"]
+repository = "https://github.com/Srylax/yeet"
+license = "AGPL-3.0-or-later"
+readme = "README.MD"
+description = "Pull-based NixOs deployment server+agent"
+
+[lints]
+workspace = true
 
 [dependencies]
 chrono = { version = "0.4.38", features = ["serde"] }

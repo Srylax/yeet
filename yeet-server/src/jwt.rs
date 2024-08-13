@@ -1,18 +1,17 @@
 use std::sync::Arc;
 
-use axum::{async_trait, RequestPartsExt};
-use axum::extract::{FromRef, FromRequestParts, Path};
 use axum::extract::rejection::PathRejection;
+use axum::extract::{FromRef, FromRequestParts, Path};
 use axum::http::request::Parts;
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum_extra::headers::Authorization;
+use axum::{async_trait, RequestPartsExt};
 use axum_extra::headers::authorization::Bearer;
+use axum_extra::headers::Authorization;
 use axum_extra::typed_header::TypedHeaderRejection;
 use axum_extra::TypedHeader;
 use axum_thiserror::ErrorStatus;
 use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{DecodingKey, encode, EncodingKey, Header, Validation};
+use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header, Validation};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -20,7 +19,7 @@ use uuid::Uuid;
 
 use yeet_api::Capability;
 
-use crate::{AppState, JTI};
+use crate::{AppState, Jti};
 
 fn jwt_validation(aud: &str) -> Validation {
     let mut val = Validation::default();
@@ -31,9 +30,9 @@ fn jwt_validation(aud: &str) -> Validation {
 
 #[derive(Serialize, Deserialize)]
 pub struct Claims {
-    aud: Vec<String>,
+    pub aud: Vec<String>,
     #[serde(with = "chrono::serde::ts_seconds")]
-    exp: DateTime<Utc>,
+    pub exp: DateTime<Utc>,
     pub jti: Uuid,
 }
 
@@ -122,8 +121,8 @@ where
             .ok_or(JwtError::HostNotFound(hostname.clone()))?;
 
         // JWT leaked and either the malicious actor or the agent tried to authenticate with an old JTI
-        if host.jti != JTI::JTI(claims.jti) {
-            host.jti = JTI::Blocked;
+        if host.jti != Jti::Jti(claims.jti) {
+            host.jti = Jti::Blocked;
             return Err(JwtError::InvalidJTI);
         }
         let (jwt, jti) = create_jwt(
@@ -132,7 +131,7 @@ where
             &jwt_secret,
         )?;
 
-        host.jti = JTI::JTI(jti);
+        host.jti = Jti::Jti(jti);
         Ok(NextJwt(jwt))
     }
 }
@@ -148,6 +147,7 @@ pub fn create_jwt(
             .into_iter()
             .flat_map(Into::<Vec<String>>::into)
             .collect(),
+        #[allow(clippy::arithmetic_side_effects)]
         exp: Utc::now() + duration,
         jti: uuid,
     };

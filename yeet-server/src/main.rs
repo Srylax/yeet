@@ -1,5 +1,6 @@
+//! Yeet that Config
 use std::collections::{HashMap, HashSet};
-use std::fs::{File, OpenOptions, rename};
+use std::fs::{rename, File, OpenOptions};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::Write;
 use std::sync::Arc;
@@ -7,14 +8,13 @@ use std::time::{Duration, Instant};
 use std::vec;
 
 use anyhow::Result;
-use axum::handler::Handler;
-use axum::response::IntoResponse;
-use axum::Router;
 use axum::routing::post;
+use axum::Router;
 use parking_lot::RwLock;
 use rand::prelude::*;
 use rand_hc::Hc128Rng;
 use serde::{Deserialize, Serialize};
+use tokio::net::TcpListener;
 use tokio::time::interval;
 use uuid::Uuid;
 
@@ -40,13 +40,13 @@ struct Host {
     hostname: String,
     store_path: String,
     status: VersionStatus,
-    jti: JTI,
+    jti: Jti,
     #[serde(skip_serializing, skip_deserializing)]
     last_ping: Option<Instant>,
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-enum JTI {
-    JTI(Uuid),
+enum Jti {
+    Jti(Uuid),
     Blocked,
 }
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
@@ -61,21 +61,22 @@ impl Default for AppState {
         let mut secret = [0; 32];
         Hc128Rng::from_entropy().fill_bytes(&mut secret);
         Self {
-            hosts: Default::default(),
+            hosts: HashMap::default(),
             jwt_secret: secret,
-            jti_blacklist: Default::default(),
+            jti_blacklist: HashSet::default(),
         }
     }
 }
 
 #[tokio::main]
+#[allow(clippy::expect_used, clippy::print_stdout)]
 async fn main() {
     let state = File::open("state.json")
         .map(serde_json::from_reader)
         .unwrap_or(Ok(AppState::default()))
         .unwrap_or_else(|_err| {
             println!("Could not parse state.json. Moving old state.json to state.json.old");
-            rename("state.json", "state.json.old").unwrap();
+            rename("state.json", "state.json.old").expect("Could not move unreadable config");
             AppState::default()
         });
 
@@ -89,9 +90,9 @@ async fn main() {
 
     let state = Arc::new(RwLock::new(state));
     {
-        let state = state.clone();
-        tokio::spawn(async move { save_state(state).await.unwrap() });
-    }
+        let state = Arc::clone(&state);
+        tokio::spawn(async move { save_state(state).await });
+    };
 
     let app = Router::new()
         .route("/system/:hostname/check", post(system_check))
@@ -100,7 +101,7 @@ async fn main() {
         .route("/token/new", post(create_token))
         .route("/token/revoke", post(revoke_token))
         .with_state(state);
-    let listener = tokio::net::TcpListener::bind("localhost:3000")
+    let listener = TcpListener::bind("localhost:3000")
         .await
         .expect("Could not bind to port");
     axum::serve(listener, app)

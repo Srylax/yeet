@@ -3,22 +3,33 @@ use std::sync::Arc;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
-use axum::response::IntoResponse;
+use axum_thiserror::ErrorStatus;
 use chrono::Duration;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-
+use serde_json::{json, Value};
+use thiserror::Error;
 use yeet_api::Capability;
 use yeet_api::VersionStatus::UpToDate;
 
-use crate::{AppState, Host, JTI};
-use crate::jwt::{Claims, create_jwt};
+use crate::jwt::{create_jwt, Claims};
+use crate::routes::register::RegisterError::HostAlreadyRegistered;
+use crate::{AppState, Host, Jti};
 
 #[derive(Serialize, Deserialize)]
 pub struct HostRegister {
     store_path: String,
     hostname: String,
+}
+
+#[derive(Error, Debug, ErrorStatus)]
+pub enum RegisterError {
+    #[error("Host with this name already registered")]
+    #[status(StatusCode::BAD_REQUEST)]
+    HostAlreadyRegistered,
+    #[error("Could not create token: {0}")]
+    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
+    InvalidToken(#[from] jsonwebtoken::errors::Error),
 }
 
 pub async fn register_host(
@@ -28,14 +39,10 @@ pub async fn register_host(
         store_path,
         hostname,
     }): Json<HostRegister>,
-) -> impl IntoResponse {
+) -> Result<Json<Value>, RegisterError> {
     let mut state = state.write();
     if state.hosts.contains_key(&hostname) {
-        return (
-            StatusCode::BAD_REQUEST,
-            "Host with this name already registered",
-        )
-            .into_response();
+        return Err(HostAlreadyRegistered);
     }
     let (jwt, jti) = create_jwt(
         vec![Capability::SystemCheck {
@@ -43,22 +50,18 @@ pub async fn register_host(
         }],
         Duration::days(7),
         &state.jwt_secret,
-    )
-    .unwrap();
+    )?;
     let host = Host {
         hostname: hostname.clone(),
         store_path,
         status: UpToDate,
-        jti: JTI::JTI(jti),
+        jti: Jti::Jti(jti),
         last_ping: None,
     };
 
     state.hosts.insert(hostname, host);
-    (
-        StatusCode::CREATED,
-        Json(json!({
-            "token": jwt
-        })),
-    )
-        .into_response()
+
+    Ok(Json(json!({
+        "token": jwt
+    })))
 }
