@@ -7,8 +7,7 @@ use axum::response::IntoResponse;
 use axum::Json;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-
+use yeet_api::SystemCheck;
 use yeet_api::VersionStatus::{NewVersionAvailable, UpToDate};
 
 use crate::jwt::NextJwt;
@@ -45,9 +44,9 @@ pub async fn system_check(
     }
     host.last_ping = Some(Instant::now());
 
-    Json(json!({
-        "status": host.status,
-        "token": jwt
-    }))
+    Json(SystemCheck {
+        status: host.status.clone(),
+        token: jwt,
+    })
     .into_response()
 }
