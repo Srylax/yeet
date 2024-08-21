@@ -48,9 +48,11 @@ fn main() -> Result<()> {
 }
 
 fn get_config() -> Result<Config> {
-    let config = dirs::cache_dir()
+    let config = dirs::state_dir()
+        .or(dirs::data_dir())
         .ok_or(anyhow!("No Cache dir"))?
         .join("yeet-agent/config.json");
+
     Ok(serde_json::from_reader(File::open(config)?)?)
 }
 
