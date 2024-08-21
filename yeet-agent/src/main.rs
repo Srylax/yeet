@@ -1,15 +1,30 @@
 //! # Yeet Agent
+
 use std::fs::{read_link, File, OpenOptions};
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::LazyLock;
 use std::thread::sleep;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use reqwest::blocking::Client;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use yeet_api::{SystemCheck, Version, VersionStatus};
+
+#[allow(clippy::expect_used)]
+static CONFIG_FILE: LazyLock<PathBuf> = LazyLock::new(|| {
+    let dir = dirs::state_dir()
+        .or(dirs::home_dir().map(|home| home.join(".local/state/")))
+        .map(|state| state.join("yeet/config.json"))
+        .expect("Welp! You do not even have a Home directory. No idea where to store the config");
+    if let Some(parent) = dir.parent() {
+        std::fs::create_dir_all(parent).expect("Failed to create config directory");
+    }
+    dir
+});
 
 #[derive(Serialize, Deserialize)]
 struct Config {
@@ -48,24 +63,16 @@ fn main() -> Result<()> {
 }
 
 fn get_config() -> Result<Config> {
-    let config = dirs::state_dir()
-        .or(dirs::data_dir())
-        .ok_or(anyhow!("No Cache dir"))?
-        .join("yeet-agent/config.json");
-
-    Ok(serde_json::from_reader(File::open(config)?)?)
+    Ok(serde_json::from_reader(File::open(&*CONFIG_FILE)?)?)
 }
 
 fn save_config(config: &Config) -> Result<()> {
-    let config_path = dirs::cache_dir()
-        .ok_or(anyhow!("No Cache dir"))?
-        .join("yeet-agent/config.json");
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open(config_path)?;
+        .open(&*CONFIG_FILE)?;
     Ok(serde_json::to_writer_pretty(file, config)?)
 }
 
