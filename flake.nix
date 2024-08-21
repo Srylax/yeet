@@ -3,95 +3,104 @@
 
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-unstable";
-        rust-overlay.url = "github:oxalica/rust-overlay";
-
+    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
-  outputs = { self, nixpkgs, rust-overlay   }:
-let
-            # Systems supported
-            allSystems = [
-              "x86_64-linux" # 64-bit Intel/AMD Linux
-              "aarch64-linux" # 64-bit ARM Linux
-              "x86_64-darwin" # 64-bit Intel macOS
-              "aarch64-darwin" # 64-bit ARM macOS
-            ];
-
-            # Helper to provide system-specific attributes
-            forAllSystems = f: nixpkgs.lib.genAttrs allSystems (system: f {
-              pkgs = import nixpkgs {
-                inherit system;
-                overlays = [
-                  # Provides Nixpkgs with a rust-bin attribute for building Rust toolchains
-                  rust-overlay.overlays.default
-                  # Uses the rust-bin attribute to select a Rust toolchain
-                  self.overlays.default
-                ];
-              };
-            });
-
-    in {
-
+  outputs = {
+    self,
+    nixpkgs,
+    rust-overlay,
+  }: {
     overlays.default = final: prev: {
-            # The Rust toolchain used for the package build
-            rustToolchain = final.rust-bin.stable.latest.default;
-          };
-
-          packages = forAllSystems ({ pkgs }: {
-            default =
-              let
-                rustPlatform = pkgs.makeRustPlatform {
-                  cargo = pkgs.rustToolchain;
-                  rustc = pkgs.rustToolchain;
-                };
-              in
-              rustPlatform.buildRustPackage {
-                name = "yeet";
-                src = ./.;
-                cargoLock = {
-                  lockFile = ./Cargo.lock;
-                };
-                buildAndTestSubdir = "yeet-agent";
-                    buildInputs = [] ++ ( pkgs.lib.optionals pkgs.stdenv.isDarwin (with pkgs.darwin.apple_sdk.frameworks; [
-                      SystemConfiguration
-                      CoreServices
-                    ]
-                  ));
-};
-          });
-          nixosModules.default =  {pkgs,lib,...}: with lib; {
-
-      options.services.yeet-agent = {
-        enable = mkEnableOption "Yeet Deploy Agent";
-
-        package = mkPackageOption nixpkgs "yeet" { };
-      };
-
-      config = mkIf cfg.enable {
-        systemd.services.yeet-agent = {
-          description = "yeet Deploy Agent";
-          wants = [ "network-online.target" ];
-          after = ["network-online.target"];
-          path = [ config.nix.package ];
-          wantedBy = [ "multi-user.target" ];
-
-          # yeet requires $USER to be set
-          environment.USER = "root";
-
-          # don't stop the service if the unit disappears
-          unitConfig.X-StopOnRemoval = false;
-
-          serviceConfig = {
-            # we don't want to kill children processes as those are deployments
-            KillMode = "process";
-            Restart = "always";
-            RestartSec = 5;
-            ExecStart = ''
-              ${cfg.package}/bin/yeet
-            '';
-          };
+      # The Rust toolchain used for the package build
+      rustToolchain = final.rust-bin.stable.latest.default;
+      yeet-agent = final.rustPlatform.buildRustPackage {
+        name = "yeet-agent";
+        src = ./.;
+        cargoLock = {
+          lockFile = ./Cargo.lock;
         };
-      };
+        buildAndTestSubdir = "yeet-agent";
+        buildInputs =
+          []
+          ++ (final.lib.optionals final.stdenv.isDarwin (
+            with final.darwin.apple_sdk.frameworks; [
+              SystemConfiguration
+              CoreServices
+            ]
+          ));
       };
     };
+
+    nixosModules.default = {
+      pkgs,
+      lib,
+      config,
+      ...
+    }:
+      with lib; let
+        cfg = config.services.yeet-agent;
+        systemdConfig = mkIf pkgs.stdenv.isLinux {
+          systemd.services.yeet-agent = {
+            description = "yeet Deploy Agent";
+            wants = ["network-online.target"];
+            after = ["network-online.target"];
+            path = [config.nix.package];
+            wantedBy = ["multi-user.target"];
+
+            # yeet requires $USER to be set
+            environment.USER = "root";
+
+            # don't stop the service if the unit disappears
+            unitConfig.X-StopOnRemoval = false;
+
+            serviceConfig = {
+              # we don't want to kill children processes as those are deployments
+              KillMode = "process";
+              Restart = "always";
+              RestartSec = 5;
+              ExecStart = ''
+                ${cfg.package}/bin/yeet-agent
+              '';
+            };
+          };
+        };
+
+        launchdConfig = mkIf pkgs.stdenv.isDarwin {
+          launchd.daemons.yeet-agent = {
+            script = ''
+              exec ${cfg.package}/bin/yeet-agent
+            '';
+
+            path = [config.nix.package pkgs.coreutils config.environment.systemPath];
+
+            environment = {
+              USER = "root";
+            };
+
+            serviceConfig.KeepAlive = true;
+            serviceConfig.RunAtLoad = true;
+            serviceConfig.ProcessType = "Interactive";
+            serviceConfig.StandardErrorPath = cfg.logFile;
+            serviceConfig.StandardOutPath = cfg.logFile;
+          };
+        };
+      in {
+        options.services.yeet-agent = {
+          enable = mkEnableOption "Yeet Deploy Agent";
+
+          package = mkPackageOption pkgs "yeet-agent" {};
+
+          logFile = mkOption {
+            type = types.nullOr types.path;
+            default =
+              if pkgs.stdenv.isDarwin
+              then /var/root/.cache/yeet/yeet-agent.log
+              else /root/.cache/yeet/yeet-agent.log;
+            description = "Absolute path to log all stderr and stdout";
+          };
+        };
+        config = mkIf cfg.enable (systemdConfig // launchdConfig);
+      };
+  };
 }
