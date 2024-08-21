@@ -68,7 +68,7 @@ pub struct TokenRequest {
     pub exp: Duration,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[non_exhaustive]
 /// Represents JWT aud
 /// Capabilities can be combined

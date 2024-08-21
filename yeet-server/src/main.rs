@@ -11,7 +11,7 @@ use axum::Router;
 use parking_lot::RwLock;
 use std::fs::{rename, File, OpenOptions};
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::io::Write;
+use std::os::unix::prelude::FileExt;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -70,7 +70,7 @@ async fn main() {
 
 async fn save_state(state: Arc<RwLock<AppState>>) -> Result<()> {
     let mut interval = interval(Duration::from_millis(500));
-    let mut file = OpenOptions::new()
+    let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
@@ -88,7 +88,8 @@ async fn save_state(state: Arc<RwLock<AppState>>) -> Result<()> {
 
         if hash != hasher.finish() {
             hash = hasher.finish();
-            file.write_all(&data)?;
+            file.set_len(0)?;
+            file.write_all_at(&data, 0)?;
         }
     }
 }

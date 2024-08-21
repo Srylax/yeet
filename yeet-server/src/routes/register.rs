@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use crate::jwt::{create_jwt, Claims};
+use crate::routes::register::RegisterError::HostAlreadyRegistered;
+use crate::AppState;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
@@ -11,10 +14,7 @@ use serde_json::{json, Value};
 use thiserror::Error;
 use yeet_api::Capability;
 use yeet_api::VersionStatus::UpToDate;
-
-use crate::jwt::{create_jwt, Claims};
-use crate::routes::register::RegisterError::HostAlreadyRegistered;
-use crate::{AppState, Host, Jti};
+use yeet_server::{Host, Jti};
 
 #[derive(Serialize, Deserialize)]
 pub struct HostRegister {

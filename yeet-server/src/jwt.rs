@@ -17,9 +17,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::AppState;
 use yeet_api::Capability;
-
-use crate::{AppState, Jti};
+use yeet_server::Jti;
 
 fn jwt_validation(aud: &str) -> Validation {
     let mut val = Validation::default();
