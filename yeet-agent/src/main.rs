@@ -7,12 +7,12 @@ use std::sync::LazyLock;
 use std::thread::sleep;
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use reqwest::blocking::Client;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use yeet_api::{SystemCheck, Version, VersionStatus};
+use yeet_api::{Version, VersionStatus};
 
 #[allow(clippy::expect_used)]
 static CONFIG_FILE: LazyLock<PathBuf> = LazyLock::new(|| {
@@ -48,11 +48,15 @@ fn main() -> Result<()> {
             .bearer_auth(&config.token)
             .json(&store_path)
             .send()?
-            .error_for_status()?
-            .json::<SystemCheck>()?;
-        config.token = check.token;
+            .error_for_status()?;
+        check
+            .headers()
+            .get("X-Auth-Token")
+            .ok_or(anyhow!("No Token provided"))?
+            .to_str()?
+            .clone_into(&mut config.token);
         save_config(&config)?;
-        match check.status {
+        match check.json::<VersionStatus>()? {
             VersionStatus::UpToDate => {}
             VersionStatus::NewVersionAvailable(version) => {
                 update(&version)?;

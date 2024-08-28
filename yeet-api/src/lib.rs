@@ -12,15 +12,6 @@ pub enum VersionStatus {
     /// A new version is available - fetch and switch
     NewVersionAvailable(Version),
 }
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[allow(clippy::exhaustive_structs)]
-/// Response the Agents gets on the /check endpoint
-pub struct SystemCheck {
-    /// The current status of the host
-    pub status: VersionStatus,
-    /// Next Token the client has to use
-    pub token: String,
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::exhaustive_structs)]

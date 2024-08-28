@@ -7,7 +7,6 @@ use axum::response::IntoResponse;
 use axum::Json;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use yeet_api::SystemCheck;
 use yeet_api::VersionStatus::{NewVersionAvailable, UpToDate};
 
 use crate::jwt::NextJwt;
@@ -27,7 +26,7 @@ pub async fn system_check(
     let mut state = state.write_arc();
 
     let Some(host) = state.hosts.get_mut(&hostname) else {
-        return (StatusCode::NOT_FOUND, "Host not registered").into_response();
+        return (StatusCode::NOT_FOUND, jwt, "Host not registered").into_response();
     };
 
     // If the client did the update
@@ -40,13 +39,9 @@ pub async fn system_check(
 
     // Version mismatch
     if host.store_path != store_path {
-        return (StatusCode::BAD_REQUEST, "Current version mismatch").into_response();
+        return (StatusCode::BAD_REQUEST, jwt, "Current version mismatch").into_response();
     }
     host.last_ping = Some(Instant::now());
 
-    Json(SystemCheck {
-        status: host.status.clone(),
-        token: jwt,
-    })
-    .into_response()
+    (jwt, Json(host.status.clone())).into_response()
 }

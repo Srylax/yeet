@@ -86,7 +86,7 @@ where
 
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct NextJwt(pub String);
+pub struct NextJwt(pub [(String, String); 1]);
 #[async_trait]
 impl<S> FromRequestParts<S> for NextJwt
 where
@@ -132,7 +132,7 @@ where
         )?;
 
         host.jti = Jti::Jti(jti);
-        Ok(NextJwt(jwt))
+        Ok(NextJwt([("X-Auth-Token".to_owned(), jwt)]))
     }
 }
 
