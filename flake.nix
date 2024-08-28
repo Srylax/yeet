@@ -27,6 +27,7 @@
             with final.darwin.apple_sdk.frameworks; [
               SystemConfiguration
               CoreServices
+              Cocoa
             ]
           ));
       };
