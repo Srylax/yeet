@@ -8,6 +8,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Result};
+use notify_rust::Notification;
 use reqwest::blocking::Client;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -89,6 +90,11 @@ fn get_active_version() -> Result<String> {
 fn update(version: &Version) -> Result<()> {
     download(version)?;
     activate(version)?;
+    Notification::new()
+        .summary("System Update")
+        .body("System has been updated successfully")
+        .appname("Yeet")
+        .show()?;
     Ok(())
 }
 
