@@ -48,8 +48,7 @@ fn main() -> Result<()> {
             .post(check_url.as_str())
             .bearer_auth(&config.token)
             .json(&store_path)
-            .send()?
-            .error_for_status()?;
+            .send()?;
         check
             .headers()
             .get("X-Auth-Token")
@@ -57,6 +56,7 @@ fn main() -> Result<()> {
             .to_str()?
             .clone_into(&mut config.token);
         save_config(&config)?;
+        let check = check.error_for_status()?;
         match check.json::<VersionStatus>()? {
             VersionStatus::UpToDate => {}
             VersionStatus::NewVersionAvailable(version) => {
