@@ -16,6 +16,7 @@ use serde_json::json;
 use yeet_api::{Version, VersionStatus};
 
 #[allow(clippy::expect_used)]
+// TODO: CLAP
 static CONFIG_FILE: LazyLock<PathBuf> = LazyLock::new(|| {
     let dir = dirs::state_dir()
         .or(dirs::home_dir().map(|home| home.join(".local/state/")))
@@ -28,6 +29,7 @@ static CONFIG_FILE: LazyLock<PathBuf> = LazyLock::new(|| {
 });
 
 #[derive(Serialize, Deserialize)]
+// TODO: CLAP
 struct Config {
     url: Url,
     token: String,
@@ -119,8 +121,24 @@ fn download(version: &Version) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(target_os = "macos")]
 fn activate(version: &Version) -> Result<()> {
     let download = Command::new(format!("{}/activate", version.store_path)).output()?;
+    if !download.status.success() {
+        bail!("{}", String::from_utf8(download.stderr)?);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn activate(version: &Version) -> Result<()> {
+    let download = Command::new(format!(
+        "{}/bin/switch-to-configuration",
+        version.store_path
+    ))
+    .arg("switch")
+    .output()?;
     if !download.status.success() {
         bail!("{}", String::from_utf8(download.stderr)?);
     }
