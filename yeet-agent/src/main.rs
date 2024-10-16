@@ -1,8 +1,10 @@
 //! # Yeet Agent
 
 use std::fs::{read_link, File, OpenOptions};
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::Command;
+use std::str;
 use std::sync::LazyLock;
 use std::thread::sleep;
 use std::time::Duration;
@@ -89,6 +91,21 @@ fn get_active_version() -> Result<String> {
         .to_string())
 }
 
+fn trusted_public_keys() -> Result<Vec<String>> {
+    let file = File::open("/etc/nix/nix.conf")?;
+    Ok(BufReader::new(file)
+        .lines()
+        .map_while(Result::ok)
+        .find(|line| line.starts_with("trusted-public-keys"))
+        .unwrap_or(String::from(
+            "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
+        ))
+        .split_whitespace()
+        .skip(2)
+        .map(str::to_string)
+        .collect())
+}
+
 fn update(version: &Version) -> Result<()> {
     download(version)?;
     activate(version)?;
@@ -102,19 +119,23 @@ fn update(version: &Version) -> Result<()> {
 
 fn download(version: &Version) -> Result<()> {
     let download = Command::new("nix-store")
-        .args([
-            "-r",
-            &version.store_path,
-            "--option",
-            "extra-substituters",
-            &version.substitutor,
-            "--option",
-            "trusted-public-keys",
-            &version.public_key,
-            "--option",
-            "narinfo-cache-negative-ttl",
-            "0",
-        ])
+        .args(
+            [
+                vec![
+                    "--realise",
+                    &version.store_path,
+                    "--option",
+                    "extra-substituters",
+                    &version.substitutor,
+                    "--option",
+                    "trusted-public-keys",
+                    &version.public_key,
+                ],
+                trusted_public_keys()?.iter().map(String::as_str).collect(),
+                vec!["--option", "narinfo-cache-negative-ttl", "0"],
+            ]
+            .concat(),
+        )
         .output()?;
     if !download.status.success() {
         bail!("{}", String::from_utf8(download.stderr)?);
