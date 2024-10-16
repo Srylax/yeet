@@ -10,31 +10,15 @@ use axum_extra::headers::Authorization;
 use axum_extra::typed_header::TypedHeaderRejection;
 use axum_extra::TypedHeader;
 use axum_thiserror::ErrorStatus;
-use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header, Validation};
+use chrono::Duration;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use uuid::Uuid;
 
+use crate::claim::Claims;
 use crate::AppState;
 use yeet_api::Capability;
 use yeet_server::Jti;
-
-fn jwt_validation(aud: &str) -> Validation {
-    let mut val = Validation::default();
-    val.set_required_spec_claims(&["aud", "exp", "jti"]);
-    val.set_audience(&[aud]);
-    val
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Claims {
-    pub aud: Vec<String>,
-    #[serde(with = "chrono::serde::ts_seconds")]
-    pub exp: DateTime<Utc>,
-    pub jti: Uuid,
-}
 
 #[derive(Error, Debug, ErrorStatus)]
 pub enum JwtError {
@@ -65,19 +49,15 @@ where
 {
     type Rejection = JwtError;
 
+    // Decodes JWT and checks JTI blacklist
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state: Arc<RwLock<AppState>> = Arc::from_ref(state);
         let TypedHeader(Authorization(bearer)) = parts
             .extract::<TypedHeader<Authorization<Bearer>>>()
             .await?;
         let state = state.read();
-        let claims = jsonwebtoken::decode::<Claims>(
-            bearer.token(),
-            &DecodingKey::from_secret(&state.jwt_secret),
-            &jwt_validation(parts.uri.path()),
-        )?
-        .claims;
-        if state.jti_blacklist.contains(&claims.jti) {
+        let claims = Claims::decode(bearer.token(), parts.uri.path(), &state.jwt_secret)?;
+        if state.jti_blacklist.contains(&claims.jti()) {
             return Err(JwtError::BlockedJTI);
         }
         Ok(claims)
@@ -95,6 +75,7 @@ where
 {
     type Rejection = JwtError;
 
+    // After decoding and checking the JTI blacklist, creates a new JWT with a new JTI
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state: Arc<RwLock<AppState>> = Arc::from_ref(state);
         let TypedHeader(Authorization(bearer)) = parts
@@ -104,14 +85,9 @@ where
 
         let mut state = state.write_arc();
         let jwt_secret = state.jwt_secret;
-        let claims = jsonwebtoken::decode::<Claims>(
-            bearer.token(),
-            &DecodingKey::from_secret(&jwt_secret),
-            &jwt_validation(parts.uri.path()),
-        )?
-        .claims;
+        let claims = Claims::decode(bearer.token(), parts.uri.path(), &jwt_secret)?;
 
-        if state.jti_blacklist.contains(&claims.jti) {
+        if state.jti_blacklist.contains(&claims.jti()) {
             return Err(JwtError::BlockedJTI);
         }
 
@@ -121,40 +97,20 @@ where
             .ok_or(JwtError::HostNotFound(hostname.clone()))?;
 
         // JWT leaked and either the malicious actor or the agent tried to authenticate with an old JTI
-        if host.jti != Jti::Jti(claims.jti) {
+        if host.jti != Jti::Jti(claims.jti()) {
             host.jti = Jti::Blocked;
             return Err(JwtError::InvalidJTI);
         }
-        let (jwt, jti) = create_jwt(
+
+        let claim = Claims::new(
             vec![Capability::SystemCheck { hostname }],
             Duration::days(30),
-            &jwt_secret,
-        )?;
+        );
 
-        host.jti = Jti::Jti(jti);
-        Ok(NextJwt([("X-Auth-Token".to_owned(), jwt)]))
+        host.jti = Jti::Jti(claim.jti());
+        Ok(NextJwt([(
+            "X-Auth-Token".to_owned(),
+            claim.encode(&jwt_secret)?,
+        )]))
     }
-}
-
-pub fn create_jwt(
-    aud: Vec<Capability>,
-    duration: Duration,
-    secret: &[u8],
-) -> jsonwebtoken::errors::Result<(String, Uuid)> {
-    let uuid = Uuid::now_v7();
-    let claims = Claims {
-        aud: aud
-            .into_iter()
-            .flat_map(Into::<Vec<String>>::into)
-            .collect(),
-        #[allow(clippy::arithmetic_side_effects)]
-        exp: Utc::now() + duration,
-        jti: uuid,
-    };
-    let jwt = encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret),
-    )?;
-    Ok((jwt, uuid))
 }

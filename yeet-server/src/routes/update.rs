@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 use yeet_api::VersionStatus::NewVersionAvailable;
 use yeet_api::{HostUpdateRequest, Version};
 
-use crate::jwt::Claims;
+use crate::claim::Claims;
 use crate::AppState;
 
 pub async fn update_hosts(

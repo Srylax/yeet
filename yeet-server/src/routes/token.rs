@@ -13,7 +13,7 @@ use parking_lot::RwLock;
 use serde_json::{json, Value};
 use thiserror::Error;
 
-use crate::jwt::{create_jwt, Claims};
+use crate::claim::Claims;
 use crate::AppState;
 use yeet_api::{Capability, TokenRequest};
 use yeet_server::Jti;
@@ -33,7 +33,7 @@ pub async fn create_token(
     Json(TokenRequest { capabilities, exp }): Json<TokenRequest>,
 ) -> Result<Json<Value>, CreateTokenError> {
     let mut state = state.write();
-    let (jwt, jti) = create_jwt(capabilities.clone(), exp, &state.jwt_secret)?;
+    let claims = Claims::new(capabilities.clone(), exp);
 
     // If this is a host registration token, we need to unblock the host
     for capability in capabilities {
@@ -41,13 +41,13 @@ pub async fn create_token(
             continue;
         };
         let Some(host) = state.hosts.get_mut(&hostname) else {
-            state.jti_blacklist.insert(jti);
+            state.jti_blacklist.insert(claims.jti());
             return Err(CreateTokenError::HostNotFound(hostname));
         };
-        host.jti = Jti::Jti(jti);
+        host.jti = Jti::Jti(claims.jti());
     }
 
-    Ok(Json(json!({"token": jwt})))
+    Ok(Json(json!({"token": claims.encode(&state.jwt_secret)?})))
 }
 
 pub async fn revoke_token(
@@ -64,6 +64,6 @@ pub async fn revoke_token(
     ) else {
         return (StatusCode::OK, "Token already invalid").into_response();
     };
-    state.jti_blacklist.insert(token.claims.jti);
+    state.jti_blacklist.insert(token.claims.jti());
     StatusCode::OK.into_response()
 }

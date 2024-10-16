@@ -1,6 +1,6 @@
 //! Yeet that Config
 
-use crate::jwt::create_jwt;
+use crate::claim::Claims;
 use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 use crate::routes::token::{create_token, revoke_token};
@@ -26,6 +26,7 @@ mod routes {
     pub mod update;
 }
 
+mod claim;
 mod jwt;
 
 #[tokio::main]
@@ -39,13 +40,16 @@ async fn main() {
             rename("state.json", "state.json.old").expect("Could not move unreadable config");
             AppState::default()
         });
-    let (jwt, _jti) = create_jwt(
+    let claims = Claims::new(
         vec![Capability::Token, Capability::Register, Capability::Update],
         chrono::Duration::days(30),
-        &state.jwt_secret,
-    )
-    .expect("Could not Create token");
-    println!("{jwt}");
+    );
+    println!(
+        "{}",
+        claims
+            .encode(&state.jwt_secret)
+            .expect("Could not encode claims")
+    );
 
     let state = Arc::new(RwLock::new(state));
     {

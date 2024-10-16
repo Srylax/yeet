@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::jwt::{create_jwt, Claims};
+use crate::claim::Claims;
 use crate::routes::register::RegisterError::HostAlreadyRegistered;
 use crate::AppState;
 use axum::extract::State;
@@ -44,24 +44,25 @@ pub async fn register_host(
     if state.hosts.contains_key(&hostname) {
         return Err(HostAlreadyRegistered);
     }
-    let (jwt, jti) = create_jwt(
+
+    let claims = Claims::new(
         vec![Capability::SystemCheck {
             hostname: hostname.clone(),
         }],
         Duration::days(7),
-        &state.jwt_secret,
-    )?;
+    );
+
     let host = Host {
         hostname: hostname.clone(),
         store_path,
         status: UpToDate,
-        jti: Jti::Jti(jti),
+        jti: Jti::Jti(claims.jti()),
         last_ping: None,
     };
 
     state.hosts.insert(hostname, host);
 
     Ok(Json(json!({
-        "token": jwt
+        "token": claims.encode(&state.jwt_secret)?,
     })))
 }
