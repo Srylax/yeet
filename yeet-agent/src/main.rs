@@ -148,25 +148,41 @@ fn download(version: &Version) -> Result<()> {
     Ok(())
 }
 
+fn set_system_profile(version: &Version) -> Result<()> {
+    let profile = Command::new("nix-env")
+        .args([
+            "--profile",
+            "/nix/var/nix/profiles/system",
+            "--set",
+            &version.store_path,
+        ])
+        .output()?;
+    if !profile.status.success() {
+        bail!("{}", String::from_utf8(profile.stderr)?);
+    }
+    Ok(())
+}
 #[cfg(target_os = "macos")]
 fn activate(version: &Version) -> Result<()> {
-    let download = Command::new(format!("{}/activate", version.store_path)).output()?;
-    if !download.status.success() {
-        bail!("{}", String::from_utf8(download.stderr)?);
+    set_system_profile(version)?;
+    let activate = Command::new(format!("{}/activate", version.store_path)).output()?;
+    if !activate.status.success() {
+        bail!("{}", String::from_utf8(activate.stderr)?);
     }
     Ok(())
 }
 
 #[cfg(target_os = "linux")]
 fn activate(version: &Version) -> Result<()> {
-    let download = Command::new(format!(
+    set_system_profile(version)?;
+    let activate = Command::new(format!(
         "{}/bin/switch-to-configuration",
         version.store_path
     ))
     .arg("switch")
     .output()?;
-    if !download.status.success() {
-        bail!("{}", String::from_utf8(download.stderr)?);
+    if !activate.status.success() {
+        bail!("{}", String::from_utf8(activate.stderr)?);
     }
     Ok(())
 }
