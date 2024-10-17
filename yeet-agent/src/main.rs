@@ -1,65 +1,86 @@
 //! # Yeet Agent
 
-use std::fs::{read_link, File, OpenOptions};
+use std::fs::{read_link, File};
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
 use std::process::Command;
 use std::str;
-use std::sync::LazyLock;
 use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Result};
+use clap::{arg, Args, Parser, Subcommand};
+use keyring::Entry;
 use notify_rust::Notification;
 use reqwest::blocking::Client;
 use reqwest::Url;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use yeet_api::{Version, VersionStatus};
 
-#[allow(clippy::expect_used)]
-// TODO: CLAP
-static CONFIG_FILE: LazyLock<PathBuf> = LazyLock::new(|| {
-    let dir = dirs::state_dir()
-        .or(dirs::home_dir().map(|home| home.join(".local/state/")))
-        .map(|state| state.join("yeet/config.json"))
-        .expect("Welp! You do not even have a Home directory. No idea where to store the config");
-    if let Some(parent) = dir.parent() {
-        std::fs::create_dir_all(parent).expect("Failed to create config directory");
-    }
-    dir
-});
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Yeet {
+    /// Override the hostname, default is the hostname of the system
+    #[arg(short, long)]
+    name: String,
 
-#[derive(Serialize, Deserialize)]
-// TODO: CLAP
-struct Config {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Store the Token in the keyring
+    Auth {
+        /// JWT Auth Token
+        #[arg(short, long)]
+        token: String,
+    },
+    /// Deploy the Yeet Agent
+    Deploy(Deploy),
+}
+#[derive(Args)]
+struct Deploy {
+    /// Base URL of the Yeet Server
+    #[arg(short, long)]
     url: Url,
-    token: String,
-    hostname: String,
+
+    /// Seconds to wait between updates.
+    /// Lower bound, may be higher between switching versions
+    #[arg(short, long, default_value = "30")]
     sleep: u64,
 }
 
 fn main() -> Result<()> {
-    let mut config = get_config()?;
-    let check_url = config
+    let args = Yeet::parse();
+    let deploy_args = match args.command {
+        Commands::Auth { token } => {
+            let keyring_entry = Entry::new_with_target("system", "yeet-agent", &args.name)?;
+            keyring_entry.set_password(&token)?;
+            return Ok(());
+        }
+        Commands::Deploy(deploy) => deploy,
+    };
+    let keyring_entry = Entry::new_with_target("system", "yeet-agent", &args.name)?;
+    let check_url = deploy_args
         .url
-        .join(&format!("system/{}/check", config.hostname))?;
+        .join(&format!("system/{}/check", args.name))?;
+    let mut token = keyring_entry.get_password()?;
     loop {
         let store_path = json! ({
             "store_path": get_active_version()?,
         });
         let check = Client::new()
             .post(check_url.as_str())
-            .bearer_auth(&config.token)
+            .bearer_auth(&token)
             .json(&store_path)
             .send()?;
         check
             .headers()
-            .get("X-Auth-Token")
+            .get("x-auth-token")
             .ok_or(anyhow!("No Token provided"))?
             .to_str()?
-            .clone_into(&mut config.token);
-        save_config(&config)?;
+            .clone_into(&mut token);
+        keyring_entry.set_password(&token)?;
         let check = check.error_for_status()?;
         match check.json::<VersionStatus>()? {
             VersionStatus::UpToDate => {}
@@ -67,22 +88,8 @@ fn main() -> Result<()> {
                 update(&version)?;
             }
         }
-        sleep(Duration::from_secs(config.sleep));
+        sleep(Duration::from_secs(deploy_args.sleep));
     }
-}
-
-fn get_config() -> Result<Config> {
-    Ok(serde_json::from_reader(File::open(&*CONFIG_FILE)?)?)
-}
-
-fn save_config(config: &Config) -> Result<()> {
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&*CONFIG_FILE)?;
-    Ok(serde_json::to_writer_pretty(file, config)?)
 }
 
 fn get_active_version() -> Result<String> {
@@ -102,7 +109,7 @@ fn trusted_public_keys() -> Result<Vec<String>> {
         ))
         .split_whitespace()
         .skip(2)
-        .map(str::to_string)
+        .map(str::to_owned)
         .collect())
 }
 
@@ -118,24 +125,22 @@ fn update(version: &Version) -> Result<()> {
 }
 
 fn download(version: &Version) -> Result<()> {
+    let mut keys = trusted_public_keys()?;
+    keys.push(version.public_key.clone());
     let download = Command::new("nix-store")
-        .args(
-            [
-                vec![
-                    "--realise",
-                    &version.store_path,
-                    "--option",
-                    "extra-substituters",
-                    &version.substitutor,
-                    "--option",
-                    "trusted-public-keys",
-                    &version.public_key,
-                ],
-                trusted_public_keys()?.iter().map(String::as_str).collect(),
-                vec!["--option", "narinfo-cache-negative-ttl", "0"],
-            ]
-            .concat(),
-        )
+        .args(vec![
+            "--realise",
+            &version.store_path,
+            "--option",
+            "extra-substituters",
+            &version.substitutor,
+            "--option",
+            "trusted-public-keys",
+            &keys.join(" "),
+            "--option",
+            "narinfo-cache-negative-ttl",
+            "0",
+        ])
         .output()?;
     if !download.status.success() {
         bail!("{}", String::from_utf8(download.stderr)?);
