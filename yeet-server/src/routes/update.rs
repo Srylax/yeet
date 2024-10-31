@@ -1,46 +1,37 @@
 use std::sync::Arc;
 
+use crate::claim::Claims;
+use crate::error::YeetError;
+use crate::AppState;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
 use axum::Json;
 use parking_lot::RwLock;
-
 use yeet_api::VersionStatus::NewVersionAvailable;
-use yeet_api::{HostUpdateRequest, Version};
-
-use crate::claim::Claims;
-use crate::AppState;
+use yeet_api::{Capability, HostUpdateRequest, Version};
 
 pub async fn update_hosts(
     State(state): State<Arc<RwLock<AppState>>>,
-    _claim: Claims,
+    claim: Claims,
     Json(req): Json<HostUpdateRequest>,
-) -> impl IntoResponse {
+) -> Result<StatusCode, YeetError> {
+    claim.require(Capability::Update)?;
     let mut state = state.write();
 
-    let invalid_hosts: Vec<String> = req
+    let unknown_hosts: Vec<&str> = req
         .hosts
         .iter()
         .filter(|host| !state.hosts.contains_key(&host.hostname))
-        .map(|host| host.hostname.clone())
+        .map(|host| host.hostname.as_str())
         .collect();
 
-    if !invalid_hosts.is_empty() {
-        return (
-            StatusCode::NOT_FOUND,
-            format!("{invalid_hosts:?} not registered"),
-        )
-            .into_response();
+    if let Some(host) = unknown_hosts.first() {
+        return Err(YeetError::HostNotFound((**host).to_string()));
     }
 
     for host_update in req.hosts {
         let Some(host) = state.hosts.get_mut(&host_update.hostname) else {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Multithreading Error while accessing hosts",
-            )
-                .into_response();
+            return Err(YeetError::HostNotFound(host_update.hostname));
         };
         let version = Version {
             store_path: host_update.store_path,
@@ -50,5 +41,5 @@ pub async fn update_hosts(
         host.status = NewVersionAvailable(version);
     }
 
-    StatusCode::CREATED.into_response()
+    Ok(StatusCode::CREATED)
 }

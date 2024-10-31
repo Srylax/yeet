@@ -1,4 +1,5 @@
 //! API for yeet
+
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -59,7 +60,7 @@ pub struct TokenRequest {
     pub exp: Duration,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 /// Represents JWT aud
 /// Capabilities can be combined
@@ -74,16 +75,20 @@ pub enum Capability {
     /// Register a new host
     Register,
     /// Create new Tokens
-    Token,
+    Token {
+        /// Allows to with the following capability
+        capabilities: Vec<Capability>,
+    },
 }
-impl From<Capability> for Vec<String> {
+
+impl Capability {
     #[inline]
-    fn from(value: Capability) -> Self {
-        match value {
-            Capability::SystemCheck { hostname } => vec![format!("/system/{hostname}/check")],
-            Capability::Update => vec!["/system/update".to_owned()],
-            Capability::Register => vec!["/system/register".to_owned()],
-            Capability::Token => vec!["/token/new".to_owned(), "/tokens".to_owned()],
+    #[must_use]
+    /// Get the inner capabilities of a `Capability::Token`
+    pub fn token(&self) -> Option<&Vec<Capability>> {
+        match *self {
+            Capability::Token { ref capabilities } => Some(capabilities),
+            _ => None,
         }
     }
 }

@@ -19,15 +19,16 @@ use tokio::time::interval;
 use yeet_api::Capability;
 use yeet_server::AppState;
 
+mod claim;
+mod error;
+mod jwt;
+
 mod routes {
     pub mod register;
     pub mod system_check;
     pub mod token;
     pub mod update;
 }
-
-mod claim;
-mod jwt;
 
 #[tokio::main]
 #[allow(clippy::expect_used, clippy::print_stdout)]
@@ -40,8 +41,22 @@ async fn main() {
             rename("state.json", "state.json.old").expect("Could not move unreadable config");
             AppState::default()
         });
+    let host_cap: Vec<_> = state
+        .hosts
+        .keys()
+        .map(|key| Capability::SystemCheck {
+            hostname: key.clone(),
+        })
+        .chain(vec![Capability::Register, Capability::Update])
+        .collect();
     let claims = Claims::new(
-        vec![Capability::Token, Capability::Register, Capability::Update],
+        vec![
+            Capability::Token {
+                capabilities: host_cap,
+            },
+            Capability::Register,
+            Capability::Update,
+        ],
         chrono::Duration::days(30),
     );
     println!(

@@ -1,32 +1,48 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::claim::Claims;
+use crate::error::IntoResponseWithToken;
+use crate::error::YeetError;
+use crate::AppState;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::Json;
+use axum_thiserror::ErrorStatus;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use yeet_api::VersionStatus::{NewVersionAvailable, UpToDate};
-
-use crate::jwt::NextJwt;
-use crate::AppState;
 
 #[derive(Serialize, Deserialize)]
 pub struct VersionRequest {
     store_path: String,
 }
 
+#[derive(Error, Debug, ErrorStatus)]
+pub enum SystemCheckError {
+    #[error(
+        "Current registered version does not match the provided version.\
+        If you think this is a mistake, please update the version."
+    )]
+    #[status(StatusCode::BAD_REQUEST)]
+    VersionMismatch,
+}
+
 pub async fn system_check(
     State(state): State<Arc<RwLock<AppState>>>,
     Path(hostname): Path<String>,
-    NextJwt(jwt): NextJwt,
+    claims: Claims,
     Json(VersionRequest { store_path }): Json<VersionRequest>,
-) -> impl IntoResponse {
+) -> Result<Response, Response> {
     let mut state = state.write_arc();
+    let jwt = claims
+        .rotate(&mut state, hostname.clone()) // Requires implicitly the `Capability::SystemCheck { hostname }` capability
+        .map_err(IntoResponse::into_response)?;
 
     let Some(host) = state.hosts.get_mut(&hostname) else {
-        return (StatusCode::NOT_FOUND, jwt, "Host not registered").into_response();
+        return Err(YeetError::HostNotFound(hostname).with_token(&jwt));
     };
 
     // If the client did the update
@@ -39,9 +55,10 @@ pub async fn system_check(
 
     // Version mismatch
     if host.store_path != store_path {
-        return (StatusCode::BAD_REQUEST, jwt, "Current version mismatch").into_response();
+        return Err(SystemCheckError::VersionMismatch.with_token(&jwt));
     }
+
     host.last_ping = Some(Instant::now());
 
-    (jwt, Json(host.status.clone())).into_response()
+    Ok(Json(host.status.clone()).with_token(&jwt))
 }

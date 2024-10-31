@@ -7,33 +7,44 @@ use axum::Json;
 use axum_extra::headers::authorization::Bearer;
 use axum_extra::headers::Authorization;
 use axum_extra::TypedHeader;
-use axum_thiserror::ErrorStatus;
 use jsonwebtoken::{DecodingKey, Validation};
 use parking_lot::RwLock;
 use serde_json::{json, Value};
-use thiserror::Error;
 
 use crate::claim::Claims;
+use crate::error::YeetError;
 use crate::AppState;
 use yeet_api::{Capability, TokenRequest};
 use yeet_server::Jti;
 
-#[derive(Error, Debug, ErrorStatus)]
-pub enum CreateTokenError {
-    #[error("Could not create token: {0}")]
-    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
-    InvalidToken(#[from] jsonwebtoken::errors::Error),
-    #[error("{0}: Host not Registered")]
-    #[status(StatusCode::BAD_REQUEST)]
-    HostNotFound(String),
-}
 pub async fn create_token(
     State(state): State<Arc<RwLock<AppState>>>,
-    _claims: Claims,
+    claims: Claims,
     Json(TokenRequest { capabilities, exp }): Json<TokenRequest>,
-) -> Result<Json<Value>, CreateTokenError> {
+) -> Result<Json<Value>, YeetError> {
     let mut state = state.write();
-    let claims = Claims::new(capabilities.clone(), exp);
+    let mut token_cap = claims
+        .cap()
+        .iter()
+        .find_map(Capability::token) // Requires implicitly the `Capability::Token { C }` capability
+        .ok_or(YeetError::MissingCapability(Capability::Token {
+            capabilities: capabilities.clone(),
+        }))?
+        .clone();
+
+    // With Capability::Token { C }, you can grant capability C and Capability::Token { C }
+    token_cap.extend(token_cap.clone().into_iter().map(|cap| Capability::Token {
+        capabilities: vec![cap],
+    }));
+
+    if let Some(missing_cap) = capabilities.iter().find(|cap| !token_cap.contains(cap)) {
+        return Err(YeetError::MissingCapability(Capability::Token {
+            capabilities: vec![missing_cap.clone()],
+        }));
+    }
+
+    let new_claims = Claims::new(capabilities.clone(), exp);
+    let token = new_claims.encode(&state.jwt_secret)?; // encode before modifying state
 
     // If this is a host registration token, we need to unblock the host
     for capability in capabilities {
@@ -41,13 +52,13 @@ pub async fn create_token(
             continue;
         };
         let Some(host) = state.hosts.get_mut(&hostname) else {
-            state.jti_blacklist.insert(claims.jti());
-            return Err(CreateTokenError::HostNotFound(hostname));
+            state.jti_blacklist.insert(new_claims.jti());
+            return Err(YeetError::HostNotFound(hostname));
         };
-        host.jti = Jti::Jti(claims.jti());
+        host.jti = Jti::Jti(new_claims.jti());
     }
 
-    Ok(Json(json!({"token": claims.encode(&state.jwt_secret)?})))
+    Ok(Json(json!({"token": token})))
 }
 
 pub async fn revoke_token(
