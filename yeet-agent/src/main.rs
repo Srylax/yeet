@@ -2,6 +2,7 @@
 
 use std::fs::{read_link, read_to_string, File};
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 use std::process::Command;
 use std::str;
 use std::thread::sleep;
@@ -25,7 +26,7 @@ struct Yeet {
     /// Path to the token file
     /// Requires permission `Capability::Token { capabilities: vec![Capability::SystemCheck { hostname: name }] }`
     #[arg(short, long)]
-    token_file: String,
+    token_file: PathBuf,
 
     /// Base URL of the Yeet Server
     #[arg(short, long)]
@@ -91,6 +92,7 @@ fn trusted_public_keys() -> Result<Vec<String>> {
 
 fn create_token(args: &Yeet) -> Result<String> {
     let token = read_to_string(&args.token_file)?;
+    let token = token.trim();
 
     let token_url = args.url.join("/token/new")?;
     let token_request = TokenRequest {
