@@ -1,11 +1,13 @@
 [workspace]
-members = [ "yeet-agent","yeet-api", "yeet-server"]
+members = ["yeet-agent", "yeet-api", "yeet-server"]
 resolver = "2"
 
 [profile.release]
 lto = true
 codegen-units = 1
 opt-level = "s"
+strip = true
+panic = "abort"
 
 [workspace.lints.rust]
 future_incompatible = { level = "warn", priority = -1 }
@@ -41,3 +43,4 @@ absolute_paths = "allow"
 module_name_repetitions = "allow"
 ref_patterns = "allow"
 multiple_crate_versions = "allow"
+default_trait_access = "allow"

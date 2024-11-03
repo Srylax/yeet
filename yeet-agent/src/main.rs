@@ -8,13 +8,12 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Result};
-use clap::{arg, Args, Parser, Subcommand};
-use keyring::Entry;
+use clap::{arg, Parser};
 use notify_rust::Notification;
 use reqwest::blocking::Client;
-use reqwest::Url;
 use serde_json::json;
-use yeet_api::{Version, VersionStatus};
+use url::Url;
+use yeet_api::{Capability, TokenRequest, Version, VersionStatus};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -23,23 +22,11 @@ struct Yeet {
     #[arg(short, long)]
     name: String,
 
-    #[command(subcommand)]
-    command: Commands,
-}
+    /// JWT Auth Token
+    /// Requires permission `Capability::Token { capabilities: vec![Capability::SystemCheck { hostname: name }] }`
+    #[arg(short, long)]
+    token: String,
 
-#[derive(Subcommand)]
-enum Commands {
-    /// Store the Token in the keyring
-    Auth {
-        /// JWT Auth Token
-        #[arg(short, long)]
-        token: String,
-    },
-    /// Deploy the Yeet Agent
-    Deploy(Deploy),
-}
-#[derive(Args)]
-struct Deploy {
     /// Base URL of the Yeet Server
     #[arg(short, long)]
     url: Url,
@@ -52,23 +39,13 @@ struct Deploy {
 
 fn main() -> Result<()> {
     let args = Yeet::parse();
-    let deploy_args = match args.command {
-        Commands::Auth { token } => {
-            let keyring_entry = Entry::new_with_target("system", "yeet-agent", &args.name)?;
-            keyring_entry.set_password(&token)?;
-            return Ok(());
-        }
-        Commands::Deploy(deploy) => deploy,
-    };
-    let keyring_entry = Entry::new_with_target("system", "yeet-agent", &args.name)?;
-    let check_url = deploy_args
-        .url
-        .join(&format!("system/{}/check", args.name))?;
-    let mut token = keyring_entry.get_password()?;
+    let check_url = args.url.join(&format!("system/{}/check", args.name))?;
+    let mut token = create_token(&args)?;
     loop {
         let store_path = json! ({
             "store_path": get_active_version()?,
         });
+
         let check = Client::new()
             .post(check_url.as_str())
             .bearer_auth(&token)
@@ -80,7 +57,6 @@ fn main() -> Result<()> {
             .ok_or(anyhow!("No Token provided"))?
             .to_str()?
             .clone_into(&mut token);
-        keyring_entry.set_password(&token)?;
         let check = check.error_for_status()?;
         match check.json::<VersionStatus>()? {
             VersionStatus::UpToDate => {}
@@ -88,7 +64,7 @@ fn main() -> Result<()> {
                 update(&version)?;
             }
         }
-        sleep(Duration::from_secs(deploy_args.sleep));
+        sleep(Duration::from_secs(args.sleep));
     }
 }
 
@@ -113,6 +89,28 @@ fn trusted_public_keys() -> Result<Vec<String>> {
         .collect())
 }
 
+fn create_token(args: &Yeet) -> Result<String> {
+    let token_url = args.url.join("/token/new")?;
+    let token_request = TokenRequest {
+        capabilities: vec![Capability::SystemCheck {
+            hostname: args.name.clone(),
+        }],
+        exp: Default::default(),
+    };
+    let token = Client::new()
+        .post(token_url.as_str())
+        .bearer_auth(&args.token)
+        .json(&token_request)
+        .send()?;
+    let token = token.error_for_status()?;
+    Ok(token
+        .json::<serde_json::Value>()?
+        .get("token")
+        .ok_or(anyhow!("Error creating token"))?
+        .as_str()
+        .ok_or(anyhow!("Error creating token"))?
+        .to_owned())
+}
 fn update(version: &Version) -> Result<()> {
     download(version)?;
     activate(version)?;
