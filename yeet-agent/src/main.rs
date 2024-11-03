@@ -1,6 +1,6 @@
 //! # Yeet Agent
 
-use std::fs::{read_link, File};
+use std::fs::{read_link, read_to_string, File};
 use std::io::{BufRead, BufReader};
 use std::process::Command;
 use std::str;
@@ -22,10 +22,10 @@ struct Yeet {
     #[arg(short, long)]
     name: String,
 
-    /// JWT Auth Token
+    /// Path to the token file
     /// Requires permission `Capability::Token { capabilities: vec![Capability::SystemCheck { hostname: name }] }`
     #[arg(short, long)]
-    token: String,
+    token_file: String,
 
     /// Base URL of the Yeet Server
     #[arg(short, long)]
@@ -90,6 +90,8 @@ fn trusted_public_keys() -> Result<Vec<String>> {
 }
 
 fn create_token(args: &Yeet) -> Result<String> {
+    let token = read_to_string(&args.token_file)?;
+
     let token_url = args.url.join("/token/new")?;
     let token_request = TokenRequest {
         capabilities: vec![Capability::SystemCheck {
@@ -99,7 +101,7 @@ fn create_token(args: &Yeet) -> Result<String> {
     };
     let token = Client::new()
         .post(token_url.as_str())
-        .bearer_auth(&args.token)
+        .bearer_auth(token)
         .json(&token_request)
         .send()?;
     let token = token.error_for_status()?;
