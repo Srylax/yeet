@@ -71,20 +71,23 @@ async fn main() {
         let state = Arc::clone(&state);
         tokio::spawn(async move { save_state(state).await });
     };
-    let router = Router::new()
+
+    let listener = TcpListener::bind("localhost:3000")
+        .await
+        .expect("Could not bind to port");
+    axum::serve(listener, routes(state))
+        .await
+        .expect("Could not start axum");
+}
+
+fn routes(state: Arc<RwLock<AppState>>) -> Router {
+    Router::new()
         .route("/system/:hostname/check", post(system_check))
         .route("/system/register", post(register_host))
         .route("/system/update", post(update_hosts))
         .route("/token/new", post(create_token))
         .route("/token/revoke", post(revoke_token))
-        .with_state(state);
-
-    let listener = TcpListener::bind("localhost:3000")
-        .await
-        .expect("Could not bind to port");
-    axum::serve(listener, router)
-        .await
-        .expect("Could not start axum");
+        .with_state(state)
 }
 
 async fn save_state(state: Arc<RwLock<AppState>>) -> Result<()> {
@@ -111,4 +114,55 @@ async fn save_state(state: Arc<RwLock<AppState>>) -> Result<()> {
             file.write_all_at(&data, 0)?;
         }
     }
+}
+
+#[cfg(test)]
+use axum_test::TestServer;
+
+#[cfg(test)]
+fn test_server(
+    state: AppState,
+    capabilities: Vec<Capability>,
+) -> (TestServer, Arc<RwLock<AppState>>) {
+    let token = Claims::new(capabilities, chrono::Duration::minutes(1))
+        .encode(&state.jwt_secret)
+        .expect("Could not encode claims");
+
+    let app_state = Arc::new(RwLock::new(state));
+    let app_state_copy = Arc::clone(&app_state);
+    let app = routes(app_state);
+    let mut server = TestServer::builder()
+        .expect_success_by_default()
+        .mock_transport()
+        .build(app)
+        .expect("Could not build TestServer");
+    server.add_header("Authorization", format!("Bearer {token}"));
+    (server, app_state_copy)
+}
+
+#[cfg(test)]
+#[macro_export]
+macro_rules! test_access {
+    ($func:ident, $cap:expr) => {
+        paste::item! {
+            #[tokio::test]
+            async fn [< $func _should_authenticate >]() {
+                $func(vec![$cap]).await;
+            }
+
+            #[tokio::test]
+            #[should_panic(expected = "403 (Forbidden)")]
+            async fn [< $func _auth_with_any_cap >]() {
+                let mut unhappy_caps = Capability::all(vec![]);
+                unhappy_caps.retain(|cap| !matches!(cap, &$cap));
+                $func(unhappy_caps).await;
+            }
+
+            #[tokio::test]
+            #[should_panic(expected = "403 (Forbidden)")]
+            async fn [< $func _auth_without_cap >]() {
+                $func(vec![]).await;
+            }
+        }
+    };
 }

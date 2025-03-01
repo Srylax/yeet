@@ -32,3 +32,7 @@ async-trait = "0.1.81"
 axum_thiserror = "0.1.0"
 thiserror = "1.0.63"
 axum-extra = { version = "0.9.3", features = ["typed-header"] }
+
+[dev-dependencies]
+axum-test = "16.3.0"
+paste = "1.0.15"

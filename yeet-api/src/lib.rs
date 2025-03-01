@@ -91,4 +91,22 @@ impl Capability {
             _ => None,
         }
     }
+
+    #[inline]
+    #[must_use]
+    /// Create a token with all possible capabilities except `Capability::SystemCheck`
+    pub fn all(hosts: Vec<String>) -> Vec<Capability> {
+        let host_cap = hosts
+            .into_iter()
+            .map(|host| Capability::SystemCheck { hostname: host })
+            .chain(vec![Capability::Register, Capability::Update])
+            .collect();
+        vec![
+            Capability::Token {
+                capabilities: host_cap,
+            },
+            Capability::Register,
+            Capability::Update,
+        ]
+    }
 }

@@ -38,7 +38,7 @@ pub async fn register_host(
     }): Json<HostRegister>,
 ) -> Result<Json<Value>, Response> {
     claims.require(Capability::Register)?;
-    let mut state = state.write();
+    let mut state = state.write_arc();
     if state.hosts.contains_key(&hostname) {
         return Err(HostAlreadyRegistered.into_response());
     }
@@ -63,4 +63,76 @@ pub async fn register_host(
     Ok(Json(json!({
         "token": claims.encode(&state.jwt_secret)?,
     })))
+}
+
+#[cfg(test)]
+mod test_register {
+    use super::*;
+    use crate::{test_access, test_server};
+
+    #[derive(Deserialize)]
+    struct Token {
+        token: String,
+    }
+
+    test_access!(register_host, Capability::Register);
+
+    async fn register_host(capabilities: Vec<Capability>) {
+        let (server, state) = test_server(AppState::default(), capabilities);
+
+        let response = server
+            .post("/system/register")
+            .json(&HostRegister {
+                store_path: "/nix/store/abc".to_owned(),
+                hostname: "my-host".to_owned(),
+            })
+            .await;
+
+        let state = state.read_arc();
+        let response = response.json::<Token>();
+
+        let token =
+            Claims::decode(&response.token, &state.jwt_secret).expect("Could not decode token");
+
+        assert_eq!(
+            state.hosts.get("my-host"),
+            Some(&Host {
+                hostname: "my-host".to_owned(),
+                store_path: "/nix/store/abc".to_owned(),
+                status: UpToDate,
+                jti: Jti::Jti(token.jti()),
+                last_ping: None,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn host_already_registered() {
+        let mut app_state = AppState::default();
+        app_state.hosts.insert(
+            "my-host".to_owned(),
+            Host {
+                hostname: "my-host".to_owned(),
+                store_path: "/nix/store/abc".to_owned(),
+                status: UpToDate,
+                jti: Jti::Blocked,
+                last_ping: None,
+            },
+        );
+
+        let (mut server, _state) = test_server(app_state, vec![Capability::Register]);
+
+        server.expect_failure();
+
+        let response = server
+            .post("/system/register")
+            .json(&HostRegister {
+                store_path: "/nix/store/abc".to_owned(),
+                hostname: "my-host".to_owned(),
+            })
+            .await;
+
+        response.assert_status(HostAlreadyRegistered.into_response().status());
+        response.assert_text(HostAlreadyRegistered.to_string());
+    }
 }

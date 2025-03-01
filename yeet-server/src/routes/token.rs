@@ -78,3 +78,92 @@ pub async fn revoke_token(
     state.jti_blacklist.insert(token.claims.jti());
     StatusCode::OK.into_response()
 }
+
+#[cfg(test)]
+mod test_token {
+    use super::*;
+    use crate::{test_access, test_server};
+    use axum::response::IntoResponse;
+    use yeet_api::Capability;
+    use yeet_api::VersionStatus::{NewVersionAvailable, UpToDate};
+    use yeet_api::{HostUpdate, HostUpdateRequest, Version};
+    use yeet_server::{Host, Jti};
+
+    test_access!(
+        create_token,
+        Capability::Token {
+            capabilities: vec![Capability::Update]
+        }
+    );
+
+    async fn create_token(capabilities: Vec<Capability>) {
+        let mut app_state = AppState::default();
+        app_state.hosts.insert(
+            "my-host".to_owned(),
+            Host {
+                hostname: "my-host".to_owned(),
+                store_path: "/nix/store/abc".to_owned(),
+                status: UpToDate,
+                jti: Jti::Blocked,
+                last_ping: None,
+            },
+        );
+        let (server, state) = test_server(app_state, capabilities);
+
+        server
+            .post("/token/new")
+            .json(&HostUpdateRequest {
+                hosts: vec![HostUpdate {
+                    hostname: "my-host".to_owned(),
+                    store_path: "/nix/store/abc".to_owned(),
+                }],
+                substitutor: "my-substitutor".to_owned(),
+                public_key: "my-key".to_owned(),
+            })
+            .await
+            .assert_status(StatusCode::CREATED);
+
+        let state = state.read_arc();
+
+        assert_eq!(
+            state.hosts.get("my-host"),
+            Some(&Host {
+                hostname: "my-host".to_owned(),
+                store_path: "/nix/store/abc".to_owned(),
+                status: NewVersionAvailable(Version {
+                    store_path: "/nix/store/abc".to_owned(),
+                    substitutor: "my-substitutor".to_owned(),
+                    public_key: "my-key".to_owned(),
+                }),
+                jti: Jti::Blocked,
+                last_ping: None,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn host_not_found() {
+        let (mut server, _state) = test_server(AppState::default(), vec![Capability::Update]);
+
+        server.expect_failure();
+
+        let response = server
+            .post("/system/update")
+            .json(&HostUpdateRequest {
+                hosts: vec![HostUpdate {
+                    hostname: "my-host".to_owned(),
+                    store_path: "/nix/store/abc".to_owned(),
+                }],
+                substitutor: "my-substitutor".to_owned(),
+                public_key: "my-key".to_owned(),
+            })
+            .await;
+
+        response.assert_status(
+            YeetError::HostNotFound(String::new())
+                .into_response()
+                .status(),
+        );
+        response.assert_text(YeetError::HostNotFound("my-host".to_owned()).to_string());
+    }
+}
