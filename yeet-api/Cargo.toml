@@ -13,6 +13,6 @@ description = "Pull-based NixOs deployment server+agent"
 workspace = true
 
 [dependencies]
-chrono = { version = "0.4.38", features = ["serde"] }
-serde = { version = "1.0.204", features = ["derive"] }
-serde_with = { version = "3.9.0", features = ["chrono_0_4"] }
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+ed25519-dalek = { version = "2.1", features = ["serde"] }

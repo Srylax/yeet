@@ -1,37 +1,52 @@
 //! Yeet that Config
 
-use crate::claim::Claims;
 use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
-use crate::routes::token::{create_token, revoke_token};
 use crate::routes::update::update_hosts;
 use anyhow::Result;
 use axum::routing::post;
 use axum::Router;
+use ed25519_dalek::VerifyingKey;
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::fs::{rename, File, OpenOptions};
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::os::unix::prelude::FileExt;
+use std::os::unix::prelude::FileExt as _;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 use tokio::time::interval;
-use yeet_api::Capability;
-use yeet_server::AppState;
+use yeet_api::VersionStatus;
 
-mod claim;
 mod error;
-mod jwt;
-
 mod routes {
     pub mod register;
     pub mod system_check;
-    pub mod token;
     pub mod update;
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Default)]
+struct AppState {
+    build_machines: HashSet<VerifyingKey>,
+    hosts: HashMap<VerifyingKey, Host>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+struct Host {
+    key: VerifyingKey,
+    #[serde(skip_serializing, skip_deserializing)]
+    last_ping: Option<Instant>,
+    status: VersionStatus,
+    store_path: String,
+}
+
 #[tokio::main]
-#[allow(clippy::expect_used, clippy::print_stdout)]
+#[expect(
+    clippy::expect_used,
+    clippy::print_stdout,
+    reason = "allow in server main"
+)]
 async fn main() {
     let state = File::open("state.json")
         .map(serde_json::from_reader)
@@ -41,30 +56,6 @@ async fn main() {
             rename("state.json", "state.json.old").expect("Could not move unreadable config");
             AppState::default()
         });
-    let host_cap: Vec<_> = state
-        .hosts
-        .keys()
-        .map(|key| Capability::SystemCheck {
-            hostname: key.clone(),
-        })
-        .chain(vec![Capability::Register, Capability::Update])
-        .collect();
-    let claims = Claims::new(
-        vec![
-            Capability::Token {
-                capabilities: host_cap,
-            },
-            Capability::Register,
-            Capability::Update,
-        ],
-        chrono::Duration::days(30),
-    );
-    println!(
-        "{}",
-        claims
-            .encode(&state.jwt_secret)
-            .expect("Could not encode claims")
-    );
 
     let state = Arc::new(RwLock::new(state));
     {
@@ -82,11 +73,9 @@ async fn main() {
 
 fn routes(state: Arc<RwLock<AppState>>) -> Router {
     Router::new()
-        .route("/system/:hostname/check", post(system_check))
+        .route("/system/:hostname", post(system_check))
         .route("/system/register", post(register_host))
         .route("/system/update", post(update_hosts))
-        .route("/token/new", post(create_token))
-        .route("/token/revoke", post(revoke_token))
         .with_state(state)
 }
 
@@ -120,14 +109,7 @@ async fn save_state(state: Arc<RwLock<AppState>>) -> Result<()> {
 use axum_test::TestServer;
 
 #[cfg(test)]
-fn test_server(
-    state: AppState,
-    capabilities: Vec<Capability>,
-) -> (TestServer, Arc<RwLock<AppState>>) {
-    let token = Claims::new(capabilities, chrono::Duration::minutes(1))
-        .encode(&state.jwt_secret)
-        .expect("Could not encode claims");
-
+fn test_server(state: AppState) -> (TestServer, Arc<RwLock<AppState>>) {
     let app_state = Arc::new(RwLock::new(state));
     let app_state_copy = Arc::clone(&app_state);
     let app = routes(app_state);
@@ -136,33 +118,5 @@ fn test_server(
         .mock_transport()
         .build(app)
         .expect("Could not build TestServer");
-    server.add_header("Authorization", format!("Bearer {token}"));
     (server, app_state_copy)
-}
-
-#[cfg(test)]
-#[macro_export]
-macro_rules! test_access {
-    ($func:ident, $cap:expr) => {
-        paste::item! {
-            #[tokio::test]
-            async fn [< $func _should_authenticate >]() {
-                $func(vec![$cap]).await;
-            }
-
-            #[tokio::test]
-            #[should_panic(expected = "403 (Forbidden)")]
-            async fn [< $func _auth_with_any_cap >]() {
-                let mut unhappy_caps = Capability::all(vec![]);
-                unhappy_caps.retain(|cap| !matches!(cap, &$cap));
-                $func(unhappy_caps).await;
-            }
-
-            #[tokio::test]
-            #[should_panic(expected = "403 (Forbidden)")]
-            async fn [< $func _auth_without_cap >]() {
-                $func(vec![]).await;
-            }
-        }
-    };
 }
