@@ -13,26 +13,26 @@ description = "Pull-based NixOs deployment server+agent"
 workspace = true
 
 
-
 [dependencies]
-anyhow = "1.0.86"
-axum = "0.7.5"
-serde = { version = "1.0.204", features = ["derive"] }
-serde_json = "1.0.122"
-tokio = { version = "1.39.2", features = ["full"] }
+anyhow = "1.0"
+axum = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.39", features = ["full"] }
 yeet-api = { path = "../yeet-api" }
-parking_lot = { version = "0.12.3", features = ["arc_lock"] }
-memmap2 = "0.9.4"
-jsonwebtoken = "9.3.0"
-rand_hc = "0.3.2"
-rand = "0.8.5"
-uuid = { version = "1.10.0", features = ["v7", "serde"] }
-chrono = { version = "0.4.38", features = ["serde"] }
-async-trait = "0.1.81"
-axum_thiserror = "0.1.0"
-thiserror = "1.0.63"
-axum-extra = { version = "0.9.3", features = ["typed-header"] }
+parking_lot = { version = "0.12", features = ["arc_lock"] }
+memmap2 = "0.9"
+jsonwebtoken = "9.3"
+rand_hc = "0.4"
+rand = "0.9"
+uuid = { version = "1.10", features = ["v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+axum_thiserror = "0.1"
+thiserror = "2.0"
+axum-extra = { version = "0.10", features = ["typed-header"] }
+ed25519-dalek = "2.1"
 
 [dev-dependencies]
-axum-test = "16.3.0"
-paste = "1.0.15"
+axum-test = "17.2"
+paste = "1.0"
