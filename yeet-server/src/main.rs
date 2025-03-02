@@ -3,7 +3,6 @@
 use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 use crate::routes::update::update_hosts;
-use anyhow::Result;
 use axum::routing::post;
 use axum::Router;
 use ed25519_dalek::VerifyingKey;
@@ -60,7 +59,7 @@ async fn main() {
     let state = Arc::new(RwLock::new(state));
     {
         let state = Arc::clone(&state);
-        tokio::spawn(async move { save_state(state).await });
+        tokio::spawn(async move { save_state(&state) });
     };
 
     let listener = TcpListener::bind("localhost:3000")
@@ -79,28 +78,36 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .with_state(state)
 }
 
-async fn save_state(state: Arc<RwLock<AppState>>) -> Result<()> {
+#[tokio::main]
+#[expect(
+    clippy::expect_used,
+    clippy::infinite_loop,
+    reason = "allow in server main"
+)]
+async fn save_state(state: &Arc<RwLock<AppState>>) {
     let mut interval = interval(Duration::from_millis(500));
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open("state.json")?;
+        .open("state.json")
+        .expect("Could not open state.json");
 
     let mut hash = 0;
 
     loop {
         interval.tick().await;
         let state = state.read();
-        let data = serde_json::to_vec_pretty(&*state)?;
+        let data = serde_json::to_vec_pretty(&*state).expect("Could not serialize state");
         let mut hasher = DefaultHasher::new();
         data.hash(&mut hasher);
 
         if hash != hasher.finish() {
             hash = hasher.finish();
-            file.set_len(0)?;
-            file.write_all_at(&data, 0)?;
+            file.set_len(0).expect("Could not truncate file");
+            file.write_all_at(&data, 0)
+                .expect("Could not write to file");
         }
     }
 }
@@ -113,7 +120,7 @@ fn test_server(state: AppState) -> (TestServer, Arc<RwLock<AppState>>) {
     let app_state = Arc::new(RwLock::new(state));
     let app_state_copy = Arc::clone(&app_state);
     let app = routes(app_state);
-    let mut server = TestServer::builder()
+    let server = TestServer::builder()
         .expect_success_by_default()
         .mock_transport()
         .build(app)
