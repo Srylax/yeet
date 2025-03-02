@@ -7,19 +7,20 @@ use axum::http::StatusCode;
 use axum::Json;
 use ed25519_dalek::Signature;
 use parking_lot::RwLock;
+use serde_json::Value;
 use yeet_api::VersionStatus::NewVersionAvailable;
 use yeet_api::{HostUpdateRequest, Version};
 
 pub async fn update_hosts(
     State(state): State<Arc<RwLock<AppState>>>,
-    Json((req, signature)): Json<(String, Signature)>,
+    Json((req, signature)): Json<(Value, Signature)>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let mut state = state.write_arc();
 
-    let valid_request = state
-        .build_machines
-        .iter()
-        .any(|key| key.verify_strict(req.as_bytes(), &signature).is_ok());
+    let valid_request = state.build_machines.iter().any(|key| {
+        key.verify_strict(req.to_string().as_bytes(), &signature)
+            .is_ok()
+    });
 
     if !valid_request {
         return Err((
@@ -28,7 +29,7 @@ pub async fn update_hosts(
         ));
     }
 
-    let req: HostUpdateRequest = serde_json::from_str(&req).with_code(StatusCode::BAD_REQUEST)?;
+    let req: HostUpdateRequest = serde_json::from_value(req).with_code(StatusCode::BAD_REQUEST)?;
 
     let unknown_host = req
         .hosts
@@ -53,4 +54,56 @@ pub async fn update_hosts(
     }
 
     Ok(StatusCode::CREATED)
+}
+
+#[cfg(test)]
+mod test_update {
+    use ed25519_dalek::{ed25519::signature::SignerMut, SigningKey, VerifyingKey};
+    use yeet_api::{HostUpdate, VersionStatus};
+
+    use super::*;
+    use crate::{test_server, Host};
+
+    static SECRET_KEY_BYTES: [u8; 32] = [
+        157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,
+        105, 123, 50, 105, 25, 112, 59, 172, 3, 28, 174, 127, 96,
+    ];
+
+    #[tokio::test]
+    async fn test_update() {
+        let mut key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
+        let host = Host::default();
+        let mut state = AppState::default();
+        state.hosts.insert(host.key, host);
+        state.build_machines.insert(key.verifying_key());
+
+        let (server, state) = test_server(state);
+
+        let request = HostUpdateRequest {
+            hosts: vec![HostUpdate {
+                key: VerifyingKey::default(),
+                store_path: "new_path".to_owned(),
+            }],
+            public_key: "p_key".to_owned(),
+            substitutor: "sub".to_owned(),
+        };
+
+        server
+            .post("/system/update")
+            .json(&(
+                request.clone(),
+                key.sign(&serde_json::to_vec(&request).unwrap()),
+            ))
+            .await;
+        let state = state.read_arc();
+
+        assert_eq!(
+            state.hosts[&VerifyingKey::default()].status,
+            VersionStatus::NewVersionAvailable(Version {
+                store_path: "new_path".to_owned(),
+                substitutor: "sub".to_owned(),
+                public_key: "p_key".to_owned(),
+            })
+        );
+    }
 }

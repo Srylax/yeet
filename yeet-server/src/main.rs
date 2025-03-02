@@ -32,7 +32,7 @@ struct AppState {
     hosts: HashMap<VerifyingKey, Host>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
 struct Host {
     key: VerifyingKey,
     #[serde(skip_serializing, skip_deserializing)]
@@ -73,7 +73,7 @@ async fn main() {
 
 fn routes(state: Arc<RwLock<AppState>>) -> Router {
     Router::new()
-        .route("/system/:hostname", post(system_check))
+        .route("/system/check", post(system_check))
         .route("/system/register", post(register_host))
         .route("/system/update", post(update_hosts))
         .with_state(state)

@@ -3,7 +3,7 @@
 use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 /// Represents a Host Update
 #[expect(
     clippy::exhaustive_structs,
@@ -15,7 +15,7 @@ pub struct HostUpdate {
     /// The store path to fetch
     pub store_path: String,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 /// Represents a Host Update Request
 /// The Agent uses the substitutor to fetch the update via nix
 #[expect(
@@ -58,4 +58,11 @@ pub enum VersionStatus {
     NewVersionAvailable(Version),
     /// The version is up-to-date - no action required
     UpToDate,
+}
+
+impl Default for VersionStatus {
+    #[inline]
+    fn default() -> Self {
+        Self::UpToDate
+    }
 }
