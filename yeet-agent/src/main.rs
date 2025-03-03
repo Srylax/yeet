@@ -1,33 +1,26 @@
 //! # Yeet Agent
 
-use std::fs::{read_link, read_to_string, File};
+use std::fs::{File, read_link};
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 use std::str;
 use std::thread::sleep;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Result};
-use clap::{arg, Parser};
+use anyhow::{Result, anyhow, bail};
+use clap::{Parser, arg};
+use ed25519_dalek::SigningKey;
+use ed25519_dalek::ed25519::signature::SignerMut as _;
 use notify_rust::Notification;
 use reqwest::blocking::Client;
-use serde_json::json;
+use ssh_key::PrivateKey;
 use url::Url;
-use yeet_api::{Capability, TokenRequest, Version, VersionStatus};
+use yeet_api::{Version, VersionRequest, VersionStatus};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Yeet {
-    /// Override the hostname, default is the hostname of the system
-    #[arg(short, long)]
-    name: String,
-
-    /// Path to the token file
-    /// Requires permission `Capability::Token { capabilities: vec![Capability::SystemCheck { hostname: name }] }`
-    #[arg(short, long)]
-    token_file: PathBuf,
-
     /// Base URL of the Yeet Server
     #[arg(short, long)]
     url: Url,
@@ -40,24 +33,29 @@ struct Yeet {
 
 fn main() -> Result<()> {
     let args = Yeet::parse();
-    let check_url = args.url.join(&format!("system/{}/check", args.name))?;
-    let mut token = create_token(&args)?;
+    let check_url = args.url.join("system/check")?;
     loop {
-        let store_path = json! ({
-            "store_path": get_active_version()?,
-        });
+        let store_path = get_active_version()?;
+
+        let key = PrivateKey::read_openssh_file(Path::new("/etc/ssh/ssh_host_ed25519_key"))?;
+
+        let mut key = SigningKey::from_bytes(
+            &key.key_data()
+                .ed25519()
+                .ok_or(anyhow!("Key is not of type ED25519"))?
+                .private
+                .to_bytes(),
+        );
 
         let check = Client::new()
             .post(check_url.as_str())
-            .bearer_auth(&token)
-            .json(&store_path)
+            .json(&VersionRequest {
+                key: key.verifying_key(),
+                signature: key
+                    .sign(&[key.verifying_key().as_bytes(), store_path.as_bytes()].concat()),
+                store_path,
+            })
             .send()?;
-        check
-            .headers()
-            .get("x-auth-token")
-            .ok_or(anyhow!("No Token provided"))?
-            .to_str()?
-            .clone_into(&mut token);
         let check = check.error_for_status()?;
         match check.json::<VersionStatus>()? {
             VersionStatus::UpToDate => {}
@@ -90,31 +88,6 @@ fn trusted_public_keys() -> Result<Vec<String>> {
         .collect())
 }
 
-fn create_token(args: &Yeet) -> Result<String> {
-    let token = read_to_string(&args.token_file)?;
-    let token = token.trim();
-
-    let token_url = args.url.join("/token/new")?;
-    let token_request = TokenRequest {
-        capabilities: vec![Capability::SystemCheck {
-            hostname: args.name.clone(),
-        }],
-        exp: Default::default(),
-    };
-    let token = Client::new()
-        .post(token_url.as_str())
-        .bearer_auth(token)
-        .json(&token_request)
-        .send()?;
-    let token = token.error_for_status()?;
-    Ok(token
-        .json::<serde_json::Value>()?
-        .get("token")
-        .ok_or(anyhow!("Error creating token"))?
-        .as_str()
-        .ok_or(anyhow!("Error creating token"))?
-        .to_owned())
-}
 fn update(version: &Version) -> Result<()> {
     download(version)?;
     activate(version)?;

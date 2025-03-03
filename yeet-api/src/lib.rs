@@ -1,6 +1,6 @@
 //! API for yeet
 
-use ed25519_dalek::VerifyingKey;
+use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -45,6 +45,17 @@ pub struct Version {
     pub store_path: String,
     /// The substitutor (nix cache) to fetch the store path from
     pub substitutor: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "API Structs should be breaking change"
+)]
+pub struct VersionRequest {
+    pub key: VerifyingKey,
+    pub signature: Signature,
+    pub store_path: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

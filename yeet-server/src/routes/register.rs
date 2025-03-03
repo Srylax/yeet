@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::{AppState, Host};
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
 use ed25519_dalek::{Signature, VerifyingKey};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ pub async fn register_host(
     if !valid_request {
         return Err((
             StatusCode::UNAUTHORIZED,
-            "Not a valid build machine signature".to_owned(),
+            "Not a valid signature or not an authorized build machine".to_owned(),
         ));
     }
 
@@ -49,7 +49,7 @@ pub async fn register_host(
     }
 
     let host = Host {
-        key,
+        // key,
         store_path,
         status: UpToDate,
         last_ping: None,
@@ -62,10 +62,10 @@ pub async fn register_host(
 
 #[cfg(test)]
 mod test_register {
-    use ed25519_dalek::{ed25519::signature::SignerMut, SigningKey};
+    use ed25519_dalek::{SigningKey, ed25519::signature::SignerMut};
 
     use super::*;
-    use crate::{test_server, Host};
+    use crate::{Host, test_server};
 
     static SECRET_KEY_BYTES: [u8; 32] = [
         157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,
@@ -95,7 +95,7 @@ mod test_register {
             state.hosts[&key.verifying_key()],
             Host {
                 store_path: "my_store_path".to_owned(),
-                key: key.verifying_key(),
+                // key: key.verifying_key(),
                 ..Default::default()
             }
         );
@@ -107,7 +107,7 @@ mod test_register {
         let mut state = AppState::default();
         let host = Host {
             store_path: "my_store_path".to_owned(),
-            key: key.verifying_key(),
+            // key: key.verifying_key(),
             ..Default::default()
         };
         state.hosts.insert(key.verifying_key(), host);

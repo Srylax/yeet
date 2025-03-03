@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::error::WithStatusCode as _;
 use crate::AppState;
+use crate::error::WithStatusCode as _;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
 use ed25519_dalek::Signature;
 use parking_lot::RwLock;
 use serde_json::Value;
@@ -58,11 +58,11 @@ pub async fn update_hosts(
 
 #[cfg(test)]
 mod test_update {
-    use ed25519_dalek::{ed25519::signature::SignerMut, SigningKey, VerifyingKey};
+    use ed25519_dalek::{SigningKey, VerifyingKey, ed25519::signature::SignerMut};
     use yeet_api::{HostUpdate, VersionStatus};
 
     use super::*;
-    use crate::{test_server, Host};
+    use crate::{Host, test_server};
 
     static SECRET_KEY_BYTES: [u8; 32] = [
         157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,
@@ -74,7 +74,7 @@ mod test_update {
         let mut key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
         let host = Host::default();
         let mut state = AppState::default();
-        state.hosts.insert(host.key, host);
+        state.hosts.insert(VerifyingKey::default(), host);
         state.build_machines.insert(key.verifying_key());
 
         let (server, state) = test_server(state);

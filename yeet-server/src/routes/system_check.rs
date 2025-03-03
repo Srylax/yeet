@@ -1,22 +1,16 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::error::WithStatusCode as _;
 use crate::AppState;
+use crate::error::WithStatusCode as _;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
-use ed25519_dalek::{Signature, VerifyingKey};
 use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
-use yeet_api::VersionStatus::{self, NewVersionAvailable, UpToDate};
-
-#[derive(Serialize, Deserialize)]
-pub struct VersionRequest {
-    key: VerifyingKey,
-    signature: Signature,
-    store_path: String,
-}
+use yeet_api::{
+    VersionRequest,
+    VersionStatus::{self, NewVersionAvailable, UpToDate},
+};
 
 pub async fn system_check(
     State(state): State<Arc<RwLock<AppState>>>,
@@ -32,8 +26,7 @@ pub async fn system_check(
         return Err((StatusCode::NOT_FOUND, "Host not found".to_owned()));
     };
 
-    host.key
-        .verify_strict(store_path.as_bytes(), &signature)
+    key.verify_strict(store_path.as_bytes(), &signature)
         .with_code(StatusCode::FORBIDDEN)?;
 
     // If the client did the update
@@ -61,11 +54,14 @@ pub async fn system_check(
 
 #[cfg(test)]
 mod test_system_check {
-    use ed25519_dalek::{ed25519::signature::SignerMut, SigningKey};
+    use ed25519_dalek::{
+        SigningKey,
+        ed25519::signature::{Keypair, SignerMut},
+    };
     use yeet_api::Version;
 
     use super::*;
-    use crate::{test_server, Host};
+    use crate::{Host, test_server};
 
     static SECRET_KEY_BYTES: [u8; 32] = [
         157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,
@@ -76,12 +72,12 @@ mod test_system_check {
     async fn test_no_update() {
         let mut key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
         let host = Host {
-            key: key.verifying_key(),
+            // key: key.verifying_key(),
             store_path: "example_store_path".to_owned(),
             ..Default::default()
         };
         let mut state = AppState::default();
-        state.hosts.insert(host.key, host);
+        state.hosts.insert(key.verifying_key(), host);
 
         let (server, _state) = test_server(state);
 
@@ -101,7 +97,7 @@ mod test_system_check {
     async fn test_with_update() {
         let mut key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
         let host = Host {
-            key: key.verifying_key(),
+            // key: key.verifying_key(),
             store_path: "example_store_path".to_owned(),
             status: VersionStatus::NewVersionAvailable(Version {
                 public_key: "pub_key".to_owned(),
@@ -111,7 +107,7 @@ mod test_system_check {
             ..Default::default()
         };
         let mut state = AppState::default();
-        state.hosts.insert(host.key, host);
+        state.hosts.insert(key.verifying_key(), host);
 
         let (server, _state) = test_server(state);
 
