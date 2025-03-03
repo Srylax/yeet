@@ -72,7 +72,6 @@ mod test_system_check {
     async fn test_no_update() {
         let mut key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
         let host = Host {
-            // key: key.verifying_key(),
             store_path: "example_store_path".to_owned(),
             ..Default::default()
         };
@@ -97,7 +96,6 @@ mod test_system_check {
     async fn test_with_update() {
         let mut key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
         let host = Host {
-            // key: key.verifying_key(),
             store_path: "example_store_path".to_owned(),
             status: VersionStatus::NewVersionAvailable(Version {
                 public_key: "pub_key".to_owned(),

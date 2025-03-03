@@ -8,7 +8,7 @@ use std::str;
 use std::thread::sleep;
 use std::time::Duration;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Ok, Result, anyhow, bail};
 use clap::{Parser, arg};
 use ed25519_dalek::SigningKey;
 use ed25519_dalek::ed25519::signature::SignerMut as _;
@@ -34,32 +34,35 @@ struct Yeet {
 fn main() -> Result<()> {
     let args = Yeet::parse();
     let check_url = args.url.join("system/check")?;
+    let key = PrivateKey::read_openssh_file(Path::new("/etc/ssh/ssh_host_ed25519_key"))?;
+
+    let mut key = SigningKey::from_bytes(
+        &key.key_data()
+            .ed25519()
+            .ok_or(anyhow!("Key is not of type ED25519"))?
+            .private
+            .to_bytes(),
+    );
+
     loop {
         let store_path = get_active_version()?;
-
-        let key = PrivateKey::read_openssh_file(Path::new("/etc/ssh/ssh_host_ed25519_key"))?;
-
-        let mut key = SigningKey::from_bytes(
-            &key.key_data()
-                .ed25519()
-                .ok_or(anyhow!("Key is not of type ED25519"))?
-                .private
-                .to_bytes(),
-        );
-
         let check = Client::new()
             .post(check_url.as_str())
             .json(&VersionRequest {
                 key: key.verifying_key(),
-                signature: key
-                    .sign(&[key.verifying_key().as_bytes(), store_path.as_bytes()].concat()),
+                signature: key.sign(store_path.as_bytes()),
                 store_path,
             })
             .send()?;
-        let check = check.error_for_status()?;
+        if !check.status().is_success() {
+            bail!("Server Error ({}): {}", check.status(), check.text()?);
+        }
         match check.json::<VersionStatus>()? {
-            VersionStatus::UpToDate => {}
+            VersionStatus::UpToDate => {
+                println!("UpToDate")
+            }
             VersionStatus::NewVersionAvailable(version) => {
+                println!("NewVersionAvailable");
                 update(&version)?;
             }
         }

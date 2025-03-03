@@ -37,7 +37,6 @@ struct AppState {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
 struct Host {
-    // key: VerifyingKey,
     #[serde(skip_serializing, skip_deserializing)]
     last_ping: Option<Instant>,
     status: VersionStatus,

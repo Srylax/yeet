@@ -49,7 +49,6 @@ pub async fn register_host(
     }
 
     let host = Host {
-        // key,
         store_path,
         status: UpToDate,
         last_ping: None,
@@ -95,7 +94,6 @@ mod test_register {
             state.hosts[&key.verifying_key()],
             Host {
                 store_path: "my_store_path".to_owned(),
-                // key: key.verifying_key(),
                 ..Default::default()
             }
         );
@@ -107,7 +105,6 @@ mod test_register {
         let mut state = AppState::default();
         let host = Host {
             store_path: "my_store_path".to_owned(),
-            // key: key.verifying_key(),
             ..Default::default()
         };
         state.hosts.insert(key.verifying_key(), host);
