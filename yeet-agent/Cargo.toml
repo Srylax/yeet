@@ -21,6 +21,8 @@ notify-rust = "4.11"
 clap = { version = "4.5", features = ["derive"] }
 ssh-key = { version = "0.6", features = ["serde", "ed25519"] }
 ed25519-dalek = { version = "2.1", features = ["serde", "pem", "pkcs8"] }
+env_logger = "0.11"
+log = "0.4"
 
 
 [lints]

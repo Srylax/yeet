@@ -1,6 +1,6 @@
 //! # Yeet Agent
 
-use std::fs::{File, read_link};
+use std::fs::{read_link, File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::Command;
@@ -8,10 +8,11 @@ use std::str;
 use std::thread::sleep;
 use std::time::Duration;
 
-use anyhow::{Ok, Result, anyhow, bail};
-use clap::{Parser, arg};
-use ed25519_dalek::SigningKey;
+use anyhow::{anyhow, bail, Ok, Result};
+use clap::{arg, Parser};
 use ed25519_dalek::ed25519::signature::SignerMut as _;
+use ed25519_dalek::SigningKey;
+use log::{error, info};
 use notify_rust::Notification;
 use reqwest::blocking::Client;
 use ssh_key::PrivateKey;
@@ -31,8 +32,17 @@ struct Yeet {
     sleep: u64,
 }
 
-fn main() -> Result<()> {
-    let args = Yeet::parse();
+fn main() -> ! {
+    env_logger::init();
+    loop {
+        if let Err(err) = main_loop() {
+            error!("{err}");
+        }
+        sleep(Duration::from_secs(60));
+    }
+}
+fn main_loop() -> Result<()> {
+    let args = Yeet::try_parse()?;
     let check_url = args.url.join("system/check")?;
     let key = PrivateKey::read_openssh_file(Path::new("/etc/ssh/ssh_host_ed25519_key"))?;
 
@@ -59,10 +69,10 @@ fn main() -> Result<()> {
         }
         match check.json::<VersionStatus>()? {
             VersionStatus::UpToDate => {
-                println!("UpToDate")
+                info!("UpToDate");
             }
             VersionStatus::NewVersionAvailable(version) => {
-                println!("NewVersionAvailable");
+                info!("NewVersionAvailable");
                 update(&version)?;
             }
         }
@@ -103,6 +113,7 @@ fn update(version: &Version) -> Result<()> {
 }
 
 fn download(version: &Version) -> Result<()> {
+    info!("Downloading {}", version.store_path);
     let mut keys = trusted_public_keys()?;
     keys.push(version.public_key.clone());
     let download = Command::new("nix-store")
@@ -127,6 +138,7 @@ fn download(version: &Version) -> Result<()> {
 }
 
 fn set_system_profile(version: &Version) -> Result<()> {
+    info!("Setting system profile to {}", version.store_path);
     let profile = Command::new("nix-env")
         .args([
             "--profile",
@@ -143,6 +155,7 @@ fn set_system_profile(version: &Version) -> Result<()> {
 #[cfg(target_os = "macos")]
 fn activate(version: &Version) -> Result<()> {
     set_system_profile(version)?;
+    info!("Activating {}", version.store_path);
     let activate = Command::new(format!("{}/activate", version.store_path)).output()?;
     if !activate.status.success() {
         bail!("{}", String::from_utf8(activate.stderr)?);
@@ -153,6 +166,7 @@ fn activate(version: &Version) -> Result<()> {
 #[cfg(target_os = "linux")]
 fn activate(version: &Version) -> Result<()> {
     set_system_profile(version)?;
+    info!("Activating {}", version.store_path);
     let activate = Command::new(format!(
         "{}/bin/switch-to-configuration",
         version.store_path
