@@ -152,29 +152,21 @@ fn set_system_profile(version: &Version) -> Result<()> {
     }
     Ok(())
 }
+
 #[cfg(target_os = "macos")]
 fn activate(version: &Version) -> Result<()> {
     set_system_profile(version)?;
     info!("Activating {}", version.store_path);
-    let activate = Command::new(format!("{}/activate", version.store_path)).output()?;
-    if !activate.status.success() {
-        bail!("{}", String::from_utf8(activate.stderr)?);
-    }
+    Command::new(Path::new(&version.store_path).join("activate")).spawn()?;
     Ok(())
 }
 
 #[cfg(target_os = "linux")]
 fn activate(version: &Version) -> Result<()> {
-    set_system_profile(version)?;
     info!("Activating {}", version.store_path);
-    let activate = Command::new(format!(
-        "{}/bin/switch-to-configuration",
-        version.store_path
-    ))
-    .arg("switch")
-    .output()?;
-    if !activate.status.success() {
-        bail!("{}", String::from_utf8(activate.stderr)?);
-    }
+    set_system_profile(version)?;
+    Command::new(Path::new(&version.store_path).join("bin/switch-to-configuration"))
+        .arg("switch")
+        .spawn()?;
     Ok(())
 }
