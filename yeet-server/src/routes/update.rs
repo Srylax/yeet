@@ -1,16 +1,20 @@
 use std::sync::Arc;
 
-use crate::AppState;
 use crate::error::WithStatusCode as _;
-use axum::Json;
+use crate::AppState;
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::Json;
 use ed25519_dalek::Signature;
 use parking_lot::RwLock;
 use serde_json::Value;
 use yeet_api::VersionStatus::NewVersionAvailable;
 use yeet_api::{HostUpdateRequest, Version};
 
+/// Endpoint to set a new version for a host.
+/// The whole request needs to be signed by a build machine.
+/// The update consist of a simple `key` -> `version` and a `substitutor` which is where the agent should get its update
+/// This means that for each origin e.g. cachix, you need to call update seperately
 pub async fn update_hosts(
     State(state): State<Arc<RwLock<AppState>>>,
     Json((req, signature)): Json<(Value, Signature)>,
@@ -34,19 +38,19 @@ pub async fn update_hosts(
     let unknown_host = req
         .hosts
         .iter()
-        .any(|host| !state.hosts.contains_key(&host.key));
+        .any(|(key, _)| !state.hosts.contains_key(key));
 
     if unknown_host {
         return Err((StatusCode::NOT_FOUND, "Host not found".to_owned()));
     }
 
-    for host_update in req.hosts {
+    for (key, store_path) in req.hosts {
         let host = state
             .hosts
-            .get_mut(&host_update.key)
+            .get_mut(&key)
             .ok_or((StatusCode::NOT_FOUND, "Host not found".to_owned()))?;
         let version = Version {
-            store_path: host_update.store_path.clone(),
+            store_path: store_path.clone(),
             substitutor: req.substitutor.clone(),
             public_key: req.public_key.clone(),
         };
@@ -58,11 +62,13 @@ pub async fn update_hosts(
 
 #[cfg(test)]
 mod test_update {
-    use ed25519_dalek::{SigningKey, VerifyingKey, ed25519::signature::SignerMut};
-    use yeet_api::{HostUpdate, VersionStatus};
+    use std::collections::HashMap;
+
+    use ed25519_dalek::{ed25519::signature::SignerMut, SigningKey, VerifyingKey};
+    use yeet_api::VersionStatus;
 
     use super::*;
-    use crate::{Host, test_server};
+    use crate::{test_server, Host};
 
     static SECRET_KEY_BYTES: [u8; 32] = [
         157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,
@@ -80,10 +86,7 @@ mod test_update {
         let (server, state) = test_server(state);
 
         let request = HostUpdateRequest {
-            hosts: vec![HostUpdate {
-                key: VerifyingKey::default(),
-                store_path: "new_path".to_owned(),
-            }],
+            hosts: HashMap::from([(VerifyingKey::default(), "new_path".to_owned())]),
             public_key: "p_key".to_owned(),
             substitutor: "sub".to_owned(),
         };

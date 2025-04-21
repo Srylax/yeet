@@ -3,15 +3,15 @@
 use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 use crate::routes::update::update_hosts;
-use axum::Router;
 use axum::routing::post;
+use axum::Router;
 use ed25519_dalek::VerifyingKey;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json_any_key::any_key_map;
 use ssh_key::PublicKey;
 use std::collections::{HashMap, HashSet};
-use std::fs::{File, OpenOptions, rename};
+use std::fs::{rename, File, OpenOptions};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::os::unix::prelude::FileExt as _;
 use std::path::Path;
@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 use tokio::time::interval;
-use yeet_api::VersionStatus;
+use yeet_api::{StorePath, VersionStatus};
 
 mod error;
 mod routes {
@@ -40,7 +40,7 @@ struct Host {
     #[serde(skip_serializing, skip_deserializing)]
     last_ping: Option<Instant>,
     status: VersionStatus,
-    store_path: String,
+    store_path: StorePath,
 }
 
 #[tokio::main]

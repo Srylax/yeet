@@ -1,17 +1,22 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::AppState;
 use crate::error::WithStatusCode as _;
-use axum::Json;
+use crate::AppState;
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::Json;
 use parking_lot::RwLock;
 use yeet_api::{
     VersionRequest,
     VersionStatus::{self, NewVersionAvailable, UpToDate},
 };
 
+/// This is the "ping" command every client should send in a specific interval.
+/// Updates are handeled implicitly. There is no seperate endpoint that the agent must call to inform the server of an update.
+/// Updates are only accepted if the client is in `NewVersionAvailable` state.
+/// Else the it is handeled as a version mismatch.
+/// The store path needs to be signed by the host.
 pub async fn system_check(
     State(state): State<Arc<RwLock<AppState>>>,
     Json(VersionRequest {
@@ -55,13 +60,13 @@ pub async fn system_check(
 #[cfg(test)]
 mod test_system_check {
     use ed25519_dalek::{
-        SigningKey,
         ed25519::signature::{Keypair, SignerMut},
+        SigningKey,
     };
     use yeet_api::Version;
 
     use super::*;
-    use crate::{Host, test_server};
+    use crate::{test_server, Host};
 
     static SECRET_KEY_BYTES: [u8; 32] = [
         157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,

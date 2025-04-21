@@ -25,7 +25,7 @@ uuid = { version = "1.10", features = ["v7", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 ssh-key = { version = "0.6", features = ["serde", "ed25519"] }
 ed25519-dalek = { version = "2.1", features = ["serde"] }
-serde_json_any_key = "2.0.0"
+serde_json_any_key = "2.0"
 
 
 [dev-dependencies]

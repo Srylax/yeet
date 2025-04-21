@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::{AppState, Host};
-use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::Json;
 use ed25519_dalek::{Signature, VerifyingKey};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,10 @@ pub struct HostRegister {
     store_path: String,
 }
 
+/// Register a new host with the server.
+/// Requires the key and the current store path
+/// Only Build Machines are allowed to register.
+/// Therefore the signature contains the host key and path signed by any build machine.
 pub async fn register_host(
     State(state): State<Arc<RwLock<AppState>>>,
     Json(HostRegister {
@@ -61,10 +65,10 @@ pub async fn register_host(
 
 #[cfg(test)]
 mod test_register {
-    use ed25519_dalek::{SigningKey, ed25519::signature::SignerMut};
+    use ed25519_dalek::{ed25519::signature::SignerMut, SigningKey};
 
     use super::*;
-    use crate::{Host, test_server};
+    use crate::{test_server, Host};
 
     static SECRET_KEY_BYTES: [u8; 32] = [
         157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,

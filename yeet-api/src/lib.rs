@@ -1,20 +1,13 @@
 //! API for yeet
 
+use serde_json_any_key::any_key_map;
+use std::collections::{HashMap, HashSet};
+
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-/// Represents a Host Update
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "API Structs should be breaking change"
-)]
-pub struct HostUpdate {
-    /// The ssh pub host key of the machine
-    pub key: VerifyingKey,
-    /// The store path to fetch
-    pub store_path: String,
-}
+pub type StorePath = String;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 /// Represents a Host Update Request
 /// The Agent uses the substitutor to fetch the update via nix
@@ -24,7 +17,8 @@ pub struct HostUpdate {
 )]
 pub struct HostUpdateRequest {
     /// The hosts to update
-    pub hosts: Vec<HostUpdate>,
+    #[serde(with = "any_key_map")]
+    pub hosts: HashMap<VerifyingKey, StorePath>,
     /// The public key the agent should use to verify the update
     pub public_key: String,
     /// The substitutor the agent should use to fetch the update
@@ -42,7 +36,7 @@ pub struct Version {
     /// The public key the cache uses to sign the store path
     pub public_key: String,
     /// The store path to fetch from the nix cache
-    pub store_path: String,
+    pub store_path: StorePath,
     /// The substitutor (nix cache) to fetch the store path from
     pub substitutor: String,
 }
@@ -55,7 +49,7 @@ pub struct Version {
 pub struct VersionRequest {
     pub key: VerifyingKey,
     pub signature: Signature,
-    pub store_path: String,
+    pub store_path: StorePath,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
