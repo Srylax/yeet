@@ -3,10 +3,12 @@
 use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 use crate::routes::update::update_hosts;
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::Router;
+use chrono::{DateTime, Utc};
 use ed25519_dalek::VerifyingKey;
 use parking_lot::RwLock;
+use routes::status;
 use serde::{Deserialize, Serialize};
 use serde_json_any_key::any_key_map;
 use ssh_key::PublicKey;
@@ -24,6 +26,7 @@ use yeet_api::{StorePath, VersionStatus};
 mod error;
 mod routes {
     pub mod register;
+    pub mod status;
     pub mod system_check;
     pub mod update;
 }
@@ -35,10 +38,9 @@ struct AppState {
     hosts: HashMap<VerifyingKey, Host>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 struct Host {
-    #[serde(skip_serializing, skip_deserializing)]
-    last_ping: Option<Instant>,
+    last_ping: Option<DateTime<Utc>>,
     status: VersionStatus,
     store_path: StorePath,
 }
@@ -86,6 +88,7 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .route("/system/check", post(system_check))
         .route("/system/register", post(register_host))
         .route("/system/update", post(update_hosts))
+        .route("/status", get(status::status))
         .with_state(state)
 }
 

@@ -6,6 +6,7 @@ use crate::AppState;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
+use chrono::Utc;
 use parking_lot::RwLock;
 use yeet_api::{
     VersionRequest,
@@ -52,7 +53,7 @@ pub async fn system_check(
         ));
     }
 
-    host.last_ping = Some(Instant::now());
+    host.last_ping = Some(Utc::now());
 
     Ok(Json(host.status.clone()))
 }
