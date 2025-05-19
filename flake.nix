@@ -48,7 +48,9 @@
           };
           default = packages.yeet-agent;
         };
-        nixosModules = import ./module.nix;
       }
-    );
+    )
+    // {
+      nixosModules.yeet-agent = import ./yeet-agent.nix;
+    };
 }
