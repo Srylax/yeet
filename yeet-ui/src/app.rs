@@ -1,18 +1,19 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use egui::mutex::RwLock;
+use yeet_api::status::Status;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 // #[derive(serde::Deserialize, serde::Serialize)]
 // #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct Yeet {
-    yeet_status: Arc<RwLock<String>>,
+    yeet_status: Arc<RwLock<Status>>,
 }
 
 impl Default for Yeet {
     fn default() -> Self {
         Self {
-            yeet_status: Arc::new(RwLock::new("Nothing here yet".to_owned())),
+            yeet_status: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -53,14 +54,16 @@ impl eframe::App for Yeet {
                 let status = Arc::clone(&self.yeet_status);
                 let request = ehttp::Request::get("api/status");
                 ehttp::fetch(request, move |response| {
-                    *status.write() = match response {
-                        Ok(response) => response.text().unwrap_or("Empty response").to_owned(),
-                        Err(err) => err,
-                    };
+                    if let Some(response) = match response {
+                        Ok(response) => response.json::<Status>().ok(),
+                        Err(_err) => None,
+                    } {
+                        *status.write() = response;
+                    }
                 });
             }
 
-            ui.label(&*self.yeet_status.read());
+            ui.label(format!("{:#?}", &*self.yeet_status.read()));
 
             ui.separator();
 

@@ -1,10 +1,13 @@
 //! API for yeet
 
+use chrono::{DateTime, Utc};
 use serde_json_any_key::any_key_map;
 use std::collections::{HashMap, HashSet};
 
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
+
+pub mod status;
 
 pub type StorePath = String;
 
@@ -39,6 +42,13 @@ pub struct Version {
     pub store_path: StorePath,
     /// The substitutor (nix cache) to fetch the store path from
     pub substitutor: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+pub struct Host {
+    last_ping: Option<DateTime<Utc>>,
+    status: VersionStatus,
+    store_path: StorePath,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
