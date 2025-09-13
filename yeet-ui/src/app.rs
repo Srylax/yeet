@@ -1,7 +1,15 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
 
 use egui::mutex::RwLock;
+use egui_notify::Toasts;
 use yeet_api::status::Status;
+
+use crate::tools::NotifyFailure as _;
+
+pub static TOASTS: LazyLock<RwLock<Toasts>> = LazyLock::new(|| RwLock::new(Toasts::default()));
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 // #[derive(serde::Deserialize, serde::Serialize)]
@@ -52,12 +60,11 @@ impl eframe::App for Yeet {
 
             if ui.button("Fetch status").clicked() {
                 let status = Arc::clone(&self.yeet_status);
-                let request = ehttp::Request::get("api/status");
+                let request = ehttp::Request::get("/api/status");
                 ehttp::fetch(request, move |response| {
-                    if let Some(response) = match response {
-                        Ok(response) => response.json::<Status>().ok(),
-                        Err(_err) => None,
-                    } {
+                    if let Ok(response) = response.toast()
+                        && let Ok(response) = response.json::<Status>().toast()
+                    {
                         *status.write() = response;
                     }
                 });
@@ -70,6 +77,7 @@ impl eframe::App for Yeet {
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 egui::warn_if_debug_build(ui);
             });
+            TOASTS.write().show(ctx);
         });
     }
 }
