@@ -32,7 +32,7 @@ pub fn host_widget(ui: &mut egui::Ui, host: &Host) {
                 ));
                 ui.label(format!("Nix Cache: {}", new_version.substitutor));
             } else {
-                ui.label(format!("Latest: {}", hash(&host.store_path).rem(10000)));
+                ui.label(format!("Latest: {:x}", hash(&host.store_path).rem(10000)));
             }
         })
     });

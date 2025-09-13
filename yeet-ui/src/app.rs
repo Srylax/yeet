@@ -6,6 +6,7 @@ use std::{
 use egui::{Color32, Layout, Stroke, UiBuilder, mutex::RwLock};
 use egui_extras::{Size, StripBuilder};
 use egui_notify::Toasts;
+use jiff::Zoned;
 use yeet_api::status::Status;
 
 use crate::{tools::NotifyFailure as _, widgets::host::host_widget};
@@ -17,12 +18,16 @@ pub static TOASTS: LazyLock<RwLock<Toasts>> = LazyLock::new(|| RwLock::new(Toast
 // #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct Yeet {
     yeet_status: Arc<RwLock<Status>>,
+    last_fetch: Zoned,
 }
 
 impl Default for Yeet {
     fn default() -> Self {
         Self {
             yeet_status: Arc::new(RwLock::new(HashMap::new())),
+            last_fetch: Zoned::now()
+                .start_of_day()
+                .expect("Universe is not a day old"),
         }
     }
 }
@@ -60,7 +65,8 @@ impl eframe::App for Yeet {
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
 
-            if ui.button("Fetch status").clicked() {
+            if Zoned::now().duration_since(&self.last_fetch).as_secs() > 10 {
+                self.last_fetch = Zoned::now();
                 let status = Arc::clone(&self.yeet_status);
                 let request = ehttp::Request::get("/api/status");
                 ehttp::fetch(request, move |response| {
@@ -72,20 +78,12 @@ impl eframe::App for Yeet {
                 });
             }
 
-            ui.label(format!("{:#?}", &*self.yeet_status.read()));
-
             StripBuilder::new(ui)
                 .size(Size::remainder().at_least(50.0))
                 .size(Size::remainder().at_least(50.0))
                 .horizontal(|mut strip| {
                     for host in self.yeet_status.read().values() {
                         strip.cell(|ui| {
-                            ui.painter().rect_stroke(
-                                ui.available_rect_before_wrap(),
-                                5,
-                                Stroke::new(2.0, Color32::BLACK),
-                                egui::StrokeKind::Outside,
-                            );
                             host_widget(ui, host);
                         });
                     }
