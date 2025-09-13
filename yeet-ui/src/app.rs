@@ -7,7 +7,7 @@ use egui::mutex::RwLock;
 use egui_notify::Toasts;
 use yeet_api::status::Status;
 
-use crate::tools::NotifyFailure as _;
+use crate::{tools::NotifyFailure as _, widgets::host::host_widget};
 
 pub static TOASTS: LazyLock<RwLock<Toasts>> = LazyLock::new(|| RwLock::new(Toasts::default()));
 
@@ -31,6 +31,8 @@ impl Yeet {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+        //
+        cc.egui_ctx.set_visuals(egui::Visuals::light());
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
@@ -56,7 +58,6 @@ impl eframe::App for Yeet {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("Yeet.rs");
 
             if ui.button("Fetch status").clicked() {
                 let status = Arc::clone(&self.yeet_status);
@@ -71,6 +72,10 @@ impl eframe::App for Yeet {
             }
 
             ui.label(format!("{:#?}", &*self.yeet_status.read()));
+
+            for host in self.yeet_status.read().values() {
+                host_widget(ui, host);
+            }
 
             ui.separator();
 

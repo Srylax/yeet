@@ -1,6 +1,6 @@
 //! API for yeet
 
-use chrono::{DateTime, Utc};
+use jiff::Zoned;
 use serde_json_any_key::any_key_map;
 use std::collections::{HashMap, HashSet};
 
@@ -46,9 +46,9 @@ pub struct Version {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Host {
-    last_ping: Option<DateTime<Utc>>,
-    status: VersionStatus,
-    store_path: StorePath,
+    pub last_ping: Option<Zoned>,
+    pub status: VersionStatus,
+    pub store_path: StorePath,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

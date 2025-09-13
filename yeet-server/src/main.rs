@@ -3,22 +3,22 @@
 use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 use crate::routes::update::update_hosts;
-use axum::routing::{get, post};
 use axum::Router;
-use chrono::{DateTime, Utc};
+use axum::routing::{get, post};
 use ed25519_dalek::VerifyingKey;
+use jiff::Zoned;
 use parking_lot::RwLock;
 use routes::status;
 use serde::{Deserialize, Serialize};
 use serde_json_any_key::any_key_map;
 use ssh_key::PublicKey;
 use std::collections::{HashMap, HashSet};
-use std::fs::{rename, File, OpenOptions};
+use std::fs::{File, OpenOptions, rename};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::os::unix::prelude::FileExt as _;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::time::interval;
 use yeet_api::{StorePath, VersionStatus};
@@ -40,7 +40,7 @@ struct AppState {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 struct Host {
-    last_ping: Option<DateTime<Utc>>,
+    last_ping: Option<Zoned>,
     status: VersionStatus,
     store_path: StorePath,
 }
