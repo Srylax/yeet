@@ -5,9 +5,12 @@ resolver = "2"
 [profile.release]
 lto = true
 codegen-units = 1
-opt-level = "s"
+opt-level = 3
 strip = true
 panic = "abort"
+
+[profile.dev.package."*"]
+opt-level = 3
 
 [workspace.lints.rust]
 future_incompatible = { level = "warn", priority = -1 }
@@ -46,3 +49,4 @@ multiple_crate_versions = "allow"
 default_trait_access = "allow"
 shadow_unrelated = "allow"
 iter_over_hash_type = "allow"
+missing-inline-in-public-items = "allow"
