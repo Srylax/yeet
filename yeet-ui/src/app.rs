@@ -3,7 +3,8 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use egui::mutex::RwLock;
+use egui::{Color32, Layout, Stroke, UiBuilder, mutex::RwLock};
+use egui_extras::{Size, StripBuilder};
 use egui_notify::Toasts;
 use yeet_api::status::Status;
 
@@ -73,9 +74,39 @@ impl eframe::App for Yeet {
 
             ui.label(format!("{:#?}", &*self.yeet_status.read()));
 
-            for host in self.yeet_status.read().values() {
-                host_widget(ui, host);
-            }
+            StripBuilder::new(ui)
+                .size(Size::remainder().at_least(50.0))
+                .size(Size::remainder().at_least(50.0))
+                .horizontal(|mut strip| {
+                    for host in self.yeet_status.read().values() {
+                        strip.cell(|ui| {
+                            ui.painter().rect_stroke(
+                                ui.available_rect_before_wrap(),
+                                5,
+                                Stroke::new(2.0, Color32::BLACK),
+                                egui::StrokeKind::Outside,
+                            );
+                            host_widget(ui, host);
+                        });
+                    }
+                });
+
+            // ui.horizontal(|ui| {
+            //     ui.columns(5, |cols| {
+            //         for host in self.yeet_status.read().values() {
+            //             ui.vertical_centered_justified(|ui| {
+            //                 // ui.painter().rect_stroke(
+            //                 //     ui.available_rect_before_wrap(),
+            //                 //     5,
+            //                 //     Stroke::new(2.0, Color32::BLACK),
+            //                 //     egui::StrokeKind::Outside,
+            //                 // );
+            //                 ui.label("test");
+            //                 host_widget(ui, host);
+            //             });
+            //         }
+            //     });
+            // });
 
             ui.separator();
 

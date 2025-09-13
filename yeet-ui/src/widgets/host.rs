@@ -1,11 +1,41 @@
-use egui::{Button, Color32, Frame, Stroke};
+use std::ops::Rem;
+
+use egui::{Color32, TextFormat, text::LayoutJob, util::hash};
 use jiff::{SignedDuration, Unit, Zoned};
-use yeet_api::Host;
+use yeet_api::{Host, VersionStatus};
 
 use crate::tools::NotifyFailure as _;
 
 pub fn host_widget(ui: &mut egui::Ui, host: &Host) {
-    // .horizontal(|ui| ping(ui, host));
+    ui.group(|ui| {
+        // ui.vertical_centered(|ui| ui.label(RichText::new("Name").heading()));
+        ping(ui, host);
+
+        let version = match host.status {
+            yeet_api::VersionStatus::NewVersionAvailable(_) => {
+                colored_pair("Version:", "New version available", Color32::YELLOW)
+            }
+            yeet_api::VersionStatus::UpToDate => {
+                colored_pair("Version:", "Up to date", Color32::LIGHT_BLUE)
+            }
+        };
+
+        ui.collapsing(version, |ui| {
+            ui.label(format!(
+                "Installed: {:x}",
+                hash(&host.store_path).rem(10000)
+            ));
+            if let VersionStatus::NewVersionAvailable(ref new_version) = host.status {
+                ui.label(format!(
+                    "Latest: {:x}",
+                    hash(&new_version.store_path).rem(10000)
+                ));
+                ui.label(format!("Nix Cache: {}", new_version.substitutor));
+            } else {
+                ui.label(format!("Latest: {}", hash(&host.store_path).rem(10000)));
+            }
+        })
+    });
 }
 
 fn ping(ui: &mut egui::Ui, host: &Host) -> egui::Response {
@@ -23,8 +53,27 @@ fn ping(ui: &mut egui::Ui, host: &Host) -> egui::Response {
             } else {
                 Color32::RED
             };
-            ui.add_enabled(false, Button::new(format!("{diff:#}")).fill(color))
+            ui.label(colored_pair(
+                "Last Seen:",
+                format!("{diff:#}").as_str(),
+                color,
+            ))
         }
-        None => ui.add_enabled(false, Button::new("Never")),
+        None => ui.label(colored_pair("Last Seen:", "Never", Color32::LIGHT_GRAY)),
     }
+}
+
+fn colored_pair(label: &str, value: &str, background: Color32) -> LayoutJob {
+    let mut job = LayoutJob::default();
+    job.append(label, 0.0, TextFormat::default());
+    job.append(
+        value,
+        8.0,
+        TextFormat {
+            color: Color32::BLACK,
+            background,
+            ..Default::default()
+        },
+    );
+    job
 }

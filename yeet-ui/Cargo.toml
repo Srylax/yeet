@@ -27,6 +27,7 @@ yeet-api = { path = "../yeet-api" }
 ehttp = {version = "0.5", features = ["json"]}
 egui-notify = "0.20"
 jiff = {version = "0.2", features = ["js"]}
+egui_extras = "0.32"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
