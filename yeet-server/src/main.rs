@@ -1,8 +1,8 @@
 //! Yeet that Config
 
-use crate::routes::register::register_host;
-use crate::routes::system_check::system_check;
-use crate::routes::update::update_hosts;
+// use crate::routes::register::register_host;
+// use crate::routes::system_check::system_check;
+// use crate::routes::update::update_hosts;
 use axum::Router;
 use axum::routing::{get, post};
 use ed25519_dalek::VerifyingKey;
@@ -33,7 +33,8 @@ mod routes {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Default)]
 struct AppState {
-    build_machines: HashSet<VerifyingKey>,
+    admin_credentials: HashSet<VerifyingKey>,
+    build_machines_credentials: HashSet<VerifyingKey>,
     #[serde(with = "any_key_map")]
     hosts: HashMap<VerifyingKey, Host>,
 }
@@ -61,14 +62,6 @@ async fn main() {
             AppState::default()
         });
 
-    let key = PublicKey::read_openssh_file(Path::new("/etc/ssh/ssh_host_ed25519_key.pub"))
-        .expect("Signing key found but not valid");
-
-    let key = VerifyingKey::from_bytes(&key.key_data().ed25519().expect("Not an Ed25519 key").0)
-        .expect("Found an Ed25519 key but could not parse it ");
-
-    state.build_machines.insert(key);
-
     let state = Arc::new(RwLock::new(state));
     {
         let state = Arc::clone(&state);
@@ -85,9 +78,9 @@ async fn main() {
 
 fn routes(state: Arc<RwLock<AppState>>) -> Router {
     Router::new()
-        .route("/system/check", post(system_check))
-        .route("/system/register", post(register_host))
-        .route("/system/update", post(update_hosts))
+        // .route("/system/check", post(system_check))
+        // .route("/system/register", post(register_host))
+        // .route("/system/update", post(update_hosts))
         .route("/status", get(status::status))
         .with_state(state)
 }
@@ -95,7 +88,7 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
 #[expect(
     clippy::expect_used,
     clippy::infinite_loop,
-    reason = "allow in server main"
+    reason = "Save state as long as the server is running"
 )]
 async fn save_state(state: &Arc<RwLock<AppState>>) {
     let mut interval = interval(Duration::from_millis(500));

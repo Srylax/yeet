@@ -1,6 +1,6 @@
 //! # Yeet Agent
 
-use std::fs::{read_link, File};
+use std::fs::{File, read_link};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::Command;
@@ -8,10 +8,11 @@ use std::str;
 use std::thread::sleep;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Ok, Result};
-use clap::{arg, Parser};
-use ed25519_dalek::ed25519::signature::SignerMut as _;
+use anyhow::{Ok, Result, anyhow, bail};
+use clap::{Parser, arg};
 use ed25519_dalek::SigningKey;
+use ed25519_dalek::ed25519::signature::SignerMut as _;
+use httpsig_hyper::MessageSignatureReq;
 use log::{error, info};
 use notify_rust::Notification;
 use reqwest::blocking::Client;

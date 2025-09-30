@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
+pub mod httpsig;
 pub mod status;
 
 pub type StorePath = String;

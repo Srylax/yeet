@@ -2,6 +2,6 @@
 
 
 - [Introduction to Yeet](./intro.md)
-- [Overview](./overview.md)
+- [Quickstart](./quickstart.md)
 # For Developers
 - [Endpoints](developer/endpoints.md)
