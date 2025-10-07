@@ -11,12 +11,10 @@ use parking_lot::RwLock;
 use routes::status;
 use serde::{Deserialize, Serialize};
 use serde_json_any_key::any_key_map;
-use ssh_key::PublicKey;
 use std::collections::{HashMap, HashSet};
 use std::fs::{File, OpenOptions, rename};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::os::unix::prelude::FileExt as _;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -24,6 +22,7 @@ use tokio::time::interval;
 use yeet_api::{StorePath, VersionStatus};
 
 mod error;
+mod httpsig;
 mod routes {
     pub mod register;
     pub mod status;
@@ -37,6 +36,7 @@ struct AppState {
     build_machines_credentials: HashSet<VerifyingKey>,
     #[serde(with = "any_key_map")]
     hosts: HashMap<VerifyingKey, Host>,
+    keys: HashMap<KeyID, VerifyingKey>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
@@ -120,6 +120,8 @@ async fn save_state(state: &Arc<RwLock<AppState>>) {
 
 #[cfg(test)]
 use axum_test::TestServer;
+
+use crate::httpsig::KeyID;
 
 #[cfg(test)]
 fn test_server(state: AppState) -> (TestServer, Arc<RwLock<AppState>>) {
