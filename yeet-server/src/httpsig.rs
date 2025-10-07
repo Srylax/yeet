@@ -1,23 +1,27 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{FromRequest, Request},
     http::StatusCode,
 };
-use derive_more::From;
+use ed25519_dalek::VerifyingKey;
 use httpsig_hyper::{
     MessageSignature as _, MessageSignatureReq as _, RequestContentDigest as _,
     prelude::{AlgorithmName, PublicKey},
 };
-use serde::{Deserialize, Serialize};
+use parking_lot::RwLock;
 
 use crate::{AppState, error::WithStatusCode as _};
 
-#[derive(Debug, From, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct KeyID(String);
+pub struct HttpSig(pub VerifyingKey);
 
-impl FromRequest<AppState> for KeyID {
+impl FromRequest<Arc<RwLock<AppState>>> for HttpSig {
     type Rejection = (StatusCode, String);
 
-    async fn from_request(req: Request, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request(
+        req: Request,
+        state: &Arc<RwLock<AppState>>,
+    ) -> Result<Self, Self::Rejection> {
         let req = req
             .verify_content_digest()
             .await
@@ -30,11 +34,19 @@ impl FromRequest<AppState> for KeyID {
                 "KeyIDs must be exactly one".to_owned(),
             ));
         }
+
         let (_signature, keyid) = keyids
             .first()
             .expect("This is safe as long as we check the keyid length");
 
-        let Some(verifying_key) = state.keys.get(&keyid.to_owned().into()) else {
+        let Some(verifying_key) = state
+            .try_read()
+            .ok_or("Internal State currently not available - try again later")
+            .with_code(StatusCode::INTERNAL_SERVER_ERROR)?
+            .keys
+            .get(keyid)
+            .copied()
+        else {
             return Err((
                 StatusCode::BAD_REQUEST,
                 "The KeyID is not registered".to_owned(),
@@ -48,6 +60,6 @@ impl FromRequest<AppState> for KeyID {
             .await
             .with_code(StatusCode::BAD_REQUEST)?;
 
-        Ok(keyid.to_owned().into())
+        Ok(HttpSig(verifying_key))
     }
 }

@@ -27,10 +27,8 @@ ssh-key = { version = "0.6", features = ["serde", "ed25519"] }
 ed25519-dalek = { version = "2.1", features = ["serde"] }
 serde_json_any_key = "2.0"
 httpsig-hyper = "0.0.19"
-derive_more = { version = "2.0", features = ["from"] }
-
 
 
 [dev-dependencies]
-axum-test = "17.2"
+axum-test = {version = "18.1", features = ["reqwest"]}
 paste = "1.0"

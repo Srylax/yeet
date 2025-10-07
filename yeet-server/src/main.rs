@@ -36,7 +36,7 @@ struct AppState {
     build_machines_credentials: HashSet<VerifyingKey>,
     #[serde(with = "any_key_map")]
     hosts: HashMap<VerifyingKey, Host>,
-    keys: HashMap<KeyID, VerifyingKey>,
+    keys: HashMap<String, VerifyingKey>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
@@ -121,8 +121,6 @@ async fn save_state(state: &Arc<RwLock<AppState>>) {
 #[cfg(test)]
 use axum_test::TestServer;
 
-use crate::httpsig::KeyID;
-
 #[cfg(test)]
 fn test_server(state: AppState) -> (TestServer, Arc<RwLock<AppState>>) {
     let app_state = Arc::new(RwLock::new(state));
@@ -130,7 +128,7 @@ fn test_server(state: AppState) -> (TestServer, Arc<RwLock<AppState>>) {
     let app = routes(app_state);
     let server = TestServer::builder()
         .expect_success_by_default()
-        .mock_transport()
+        .http_transport()
         .build(app)
         .expect("Could not build TestServer");
     (server, app_state_copy)
