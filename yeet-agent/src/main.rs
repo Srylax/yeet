@@ -12,7 +12,6 @@ use anyhow::{Ok, Result, anyhow, bail};
 use clap::{Parser, arg};
 use ed25519_dalek::SigningKey;
 use ed25519_dalek::ed25519::signature::SignerMut as _;
-use httpsig_hyper::MessageSignatureReq;
 use log::{error, info};
 use notify_rust::Notification;
 use reqwest::blocking::Client;
@@ -59,11 +58,7 @@ fn main_loop() -> Result<()> {
         let store_path = get_active_version()?;
         let check = Client::new()
             .post(check_url.as_str())
-            .json(&VersionRequest {
-                key: key.verifying_key(),
-                signature: key.sign(store_path.as_bytes()),
-                store_path,
-            })
+            .json(&VersionRequest { store_path })
             .send()?;
         if !check.status().is_success() {
             bail!("Server Error ({}): {}", check.status(), check.text()?);
