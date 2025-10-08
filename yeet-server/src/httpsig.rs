@@ -1,15 +1,21 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::FromRequestParts,
-    http::{self, StatusCode},
+    Json,
+    body::Body,
+    extract::{
+        FromRequest, FromRequestParts, Request,
+        rejection::{JsonRejection, MissingJsonContentType},
+    },
+    http::{self, HeaderMap, StatusCode, header},
 };
 use ed25519_dalek::VerifyingKey;
 use httpsig_hyper::{
-    MessageSignature as _, MessageSignatureReq as _,
+    ContentDigest, MessageSignature as _, MessageSignatureReq as _, RequestContentDigest,
     prelude::{AlgorithmName, PublicKey},
 };
 use parking_lot::RwLock;
+use serde::de::DeserializeOwned;
 
 use crate::{AppState, error::WithStatusCode as _};
 
@@ -59,4 +65,53 @@ impl FromRequestParts<Arc<RwLock<AppState>>> for HttpSig {
 
         Ok(HttpSig(verifying_key))
     }
+}
+
+pub struct VerifiedJson<T>(pub T);
+
+impl<T, S> FromRequest<S> for VerifiedJson<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let req = req
+            .verify_content_digest()
+            .await
+            .with_code(StatusCode::BAD_REQUEST)?;
+
+        if !json_content_type(req.headers()) {
+            return Err((
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "Expected request with `Content-Type: application/json`".to_owned(),
+            ));
+        }
+
+        Json::from_bytes(
+            &req.into_bytes()
+                .await
+                .with_code(StatusCode::INTERNAL_SERVER_ERROR)?,
+        )
+        .with_code(StatusCode::INTERNAL_SERVER_ERROR)
+        .map(|json| VerifiedJson(json.0))
+    }
+}
+
+fn json_content_type(headers: &HeaderMap) -> bool {
+    let Some(content_type) = headers.get(header::CONTENT_TYPE) else {
+        return false;
+    };
+
+    let Ok(content_type) = content_type.to_str() else {
+        return false;
+    };
+
+    let Ok(mime) = content_type.parse::<mime::Mime>() else {
+        return false;
+    };
+
+    mime.type_() == "application"
+        && (mime.subtype() == "json" || mime.suffix().is_some_and(|name| name == "json"))
 }

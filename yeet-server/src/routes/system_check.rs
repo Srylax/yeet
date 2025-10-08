@@ -1,8 +1,9 @@
 use std::sync::Arc;
-use std::time::Instant;
 
-use crate::error::WithStatusCode as _;
-use crate::{AppState, httpsig::HttpSig};
+use crate::{
+    AppState,
+    httpsig::{HttpSig, VerifiedJson},
+};
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -21,7 +22,7 @@ use yeet_api::{
 pub async fn system_check(
     State(state): State<Arc<RwLock<AppState>>>,
     HttpSig(key): HttpSig,
-    Json(VersionRequest { store_path }): Json<VersionRequest>,
+    VerifiedJson(VersionRequest { store_path }): VerifiedJson<VersionRequest>,
 ) -> Result<Json<VersionStatus>, (StatusCode, String)> {
     let mut state = state.write_arc();
 
@@ -30,12 +31,12 @@ pub async fn system_check(
     };
 
     // If the client did the update
-    if let NewVersionAvailable(ref next_version) = host.status {
-        if next_version.store_path == store_path {
-            // The versions match up
-            host.store_path.clone_from(&store_path);
-            host.status = UpToDate;
-        }
+    if let NewVersionAvailable(ref next_version) = host.status
+        && next_version.store_path == store_path
+    {
+        // The versions match up
+        host.store_path.clone_from(&store_path);
+        host.status = UpToDate;
     }
 
     // Version mismatch -> this can happen when manually applying or when some tampers with the server

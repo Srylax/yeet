@@ -3876,6 +3876,7 @@ dependencies = [
  "httpsig-hyper",
  "jiff",
  "memmap2",
+ "mime",
  "parking_lot",
  "paste",
  "serde",
