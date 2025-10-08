@@ -5,7 +5,13 @@ in
 pkgs.rustPlatform.buildRustPackage {
   pname = manifest.name;
   version = manifest.version;
-  cargoLock.lockFile = ./Cargo.lock;
-  src = ./.;
+  cargoLock.lockFile = ../Cargo.lock;
+  src = ../.;
   buildAndTestSubdir = "yeet-server";
+  nativeBuildInputs = with pkgs; [
+    pkg-config
+  ];
+  buildInputs = with pkgs; [
+    openssl
+  ];
 }

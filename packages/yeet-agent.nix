@@ -5,8 +5,8 @@ in
 pkgs.rustPlatform.buildRustPackage {
   pname = manifest.name;
   version = manifest.version;
-  cargoLock.lockFile = ./Cargo.lock;
-  src = ./.;
+  cargoLock.lockFile = ../Cargo.lock;
+  src = ../.;
   buildAndTestSubdir = "yeet-agent";
   nativeBuildInputs = with pkgs; [
     pkg-config

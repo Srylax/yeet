@@ -1,9 +1,12 @@
-{ pkgs }:
+{
+  pkgs,
+  perSystem,
+}:
 pkgs.mkShell {
   # Add build dependencies
   packages = [
-    pkgs.yeet-server
-    pkgs.yeet-agent
+    perSystem.yeet.yeet-server
+    perSystem.yeet.yeet-agent
   ];
 
   # Add environment variables

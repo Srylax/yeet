@@ -8,7 +8,7 @@ Create a new authtoken on cachix.
 
 `nix run nixpkgs#yeet-server`
 
-`nix flake init --template "github:srylax/yeet#blueprint"`
+`nix flake init --template github:srylax/yeet`
 `nix develop`
 `yeet vm my-nixos`
 `yeet status`
