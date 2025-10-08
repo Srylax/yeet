@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{FromRequest, Request},
-    http::StatusCode,
+    extract::FromRequestParts,
+    http::{self, StatusCode},
 };
 use ed25519_dalek::VerifyingKey;
 use httpsig_hyper::{
-    MessageSignature as _, MessageSignatureReq as _, RequestContentDigest as _,
+    MessageSignature as _, MessageSignatureReq as _,
     prelude::{AlgorithmName, PublicKey},
 };
 use parking_lot::RwLock;
@@ -15,17 +15,14 @@ use crate::{AppState, error::WithStatusCode as _};
 
 pub struct HttpSig(pub VerifyingKey);
 
-impl FromRequest<Arc<RwLock<AppState>>> for HttpSig {
+impl FromRequestParts<Arc<RwLock<AppState>>> for HttpSig {
     type Rejection = (StatusCode, String);
 
-    async fn from_request(
-        req: Request,
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
         state: &Arc<RwLock<AppState>>,
     ) -> Result<Self, Self::Rejection> {
-        let req = req
-            .verify_content_digest()
-            .await
-            .with_code(StatusCode::BAD_REQUEST)?;
+        let req = http::Request::from_parts(parts.clone(), String::new());
 
         let keyids = req.get_key_ids().with_code(StatusCode::BAD_REQUEST)?;
         if keyids.len() != 1 {

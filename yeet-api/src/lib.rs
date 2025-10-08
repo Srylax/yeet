@@ -58,8 +58,6 @@ pub struct Host {
     reason = "API Structs should be breaking change"
 )]
 pub struct VersionRequest {
-    pub key: VerifyingKey,
-    pub signature: Signature,
     pub store_path: StorePath,
 }
 
