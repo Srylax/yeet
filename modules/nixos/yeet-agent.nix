@@ -4,10 +4,12 @@
   lib,
   ...
 }:
-with lib; let
+with lib;
+let
   cfg = config.services.yeet-agent;
-in {
-  meta.maintainers = [lib.maintainers.Srylax];
+in
+{
+  meta.maintainers = [ lib.maintainers.Srylax ];
 
   options.services.yeet-agent = {
     enable = mkEnableOption "Yeet Deploy Agent: https://github.com/Srylax/yeet";
@@ -23,16 +25,16 @@ in {
       description = "Seconds to wait between updates";
     };
 
-    package = mkPackageOption pkgs "yeet-agent" {};
+    package = mkPackageOption pkgs "yeet-agent" { };
   };
 
   config = mkIf cfg.enable {
     systemd.services.yeet-agent = {
       description = "Yeet Deploy Agent";
-      wants = ["network-online.target"];
-      after = ["network-online.target"];
-      path = [config.nix.package];
-      wantedBy = ["multi-user.target"];
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" ];
+      path = [ config.nix.package ];
+      wantedBy = [ "multi-user.target" ];
 
       environment.USER = "root";
 
