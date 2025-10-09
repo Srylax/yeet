@@ -43,6 +43,22 @@ pub async fn register<K: SigningKey + Sync>(
         .await
 }
 
+pub async fn update<K: SigningKey + Sync>(
+    url: Url,
+    key: K,
+    host_update_request: api::HostUpdateRequest,
+) -> anyhow::Result<StatusCode> {
+    Client::new()
+        .post(url.join("/system/update")?)
+        .json(&host_update_request)
+        .sign(&sig_param(&key)?, &key)
+        .await?
+        .send()
+        .await?
+        .error_for_code()
+        .await
+}
+
 fn sig_param<K: SigningKey + Sync>(key: &K) -> anyhow::Result<HttpSignatureParams> {
     let mut signature_params = HttpSignatureParams::try_new(&COMPONENTS)?;
     signature_params.set_key_info(key);

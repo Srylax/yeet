@@ -20,7 +20,7 @@ pub type StorePath = String;
     reason = "API Structs should be breaking change"
 )]
 pub struct HostUpdateRequest {
-    /// The hosts to update
+    /// The hosts to update identified by their public key
     #[serde(with = "any_key_map")]
     pub hosts: HashMap<VerifyingKey, StorePath>,
     /// The public key the agent should use to verify the update

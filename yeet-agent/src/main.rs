@@ -1,23 +1,20 @@
 //! # Yeet Agent
 
+use std::collections::HashMap;
 use std::env::current_dir;
 use std::fs::{File, read_link, read_to_string};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str;
-use std::thread::sleep;
-use std::time::Duration;
 
-use anyhow::{Ok, Result, anyhow, bail};
-use clap::{Args, Parser, Subcommand, arg};
-use ed25519_dalek::ed25519::signature::SignerMut as _;
+use anyhow::{Ok, Result, bail};
+use clap::{Parser, Subcommand, arg};
+use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::pkcs8::DecodePublicKey;
-use ed25519_dalek::{SigningKey, VerifyingKey};
-use httpsig_hyper::prelude::{AlgorithmName, SecretKey};
-use log::{error, info};
+use httpsig_hyper::prelude::SecretKey;
+use log::info;
 use notify_rust::Notification;
-use ssh_key::PrivateKey;
 use url::Url;
 use yeet_agent::nix::run_vm;
 use yeet_agent::server;
@@ -74,6 +71,32 @@ enum Commands {
         #[arg(long)]
         name: Option<String>,
     },
+    /// Update a host
+    Update {
+        /// Base URL of the Yeet Server
+        #[arg(short, long)]
+        url: Url,
+
+        /// Path to the admin key
+        #[arg(long)]
+        key: PathBuf, // TODO: create a key selector
+
+        /// Pub key of the client
+        #[arg(long)]
+        host_key: PathBuf,
+
+        /// The new store path
+        #[arg(long)]
+        store_path: String,
+
+        /// The public key the agent should use to verify the update
+        #[arg(long)]
+        public_key: String,
+
+        /// The substitutor the agent should use to fetch the update
+        #[arg(long)]
+        substitutor: String,
+    },
     /// Run you hosts inside a vm
     VM {
         /// NixOs host to run and build
@@ -110,6 +133,28 @@ async fn main() -> anyhow::Result<()> {
                         key: get_pub_key(&host_key)?,
                         store_path,
                         name
+                    }
+                )
+                .await
+            );
+        }
+        Commands::Update {
+            url,
+            key,
+            host_key,
+            store_path,
+            public_key,
+            substitutor,
+        } => {
+            println!(
+                "{:?}",
+                server::update(
+                    url,
+                    get_key(&key)?,
+                    api::HostUpdateRequest {
+                        hosts: HashMap::from([(get_pub_key(&host_key)?, store_path)]),
+                        public_key,
+                        substitutor
                     }
                 )
                 .await
