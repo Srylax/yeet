@@ -3,18 +3,21 @@
 use std::collections::HashMap;
 use std::env::current_dir;
 use std::fs::{File, read_link, read_to_string};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead as _, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str;
 
 use anyhow::{Ok, Result, bail};
-use clap::{Parser, Subcommand, arg};
+use clap::{Args, Parser, Subcommand, arg};
 use ed25519_dalek::VerifyingKey;
-use ed25519_dalek::pkcs8::DecodePublicKey;
+use ed25519_dalek::pkcs8::DecodePublicKey as _;
+use figment::Figment;
+use figment::providers::{Env, Format as _, Serialized, Toml};
 use httpsig_hyper::prelude::SecretKey;
 use log::info;
 use notify_rust::Notification;
+use serde::{Deserialize, Serialize};
 use url::Url;
 use yeet_agent::nix::run_vm;
 use yeet_agent::server;
@@ -22,43 +25,44 @@ use yeet_agent::server;
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Yeet {
+    #[command(flatten)]
+    config: ClapConfig,
     #[command(subcommand)]
     command: Commands,
+}
+
+#[derive(Args, Serialize, Deserialize)]
+struct ClapConfig {
+    /// Base URL of the Yeet Server
+    #[arg(long, global = true)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<Url>,
+
+    /// Path to the admin key
+    #[arg(long, global = true)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    httpsig_key: Option<PathBuf>, // TODO: create a key selector
+}
+
+#[derive(Serialize, Deserialize)]
+struct Config {
+    url: Url,
+    httpsig_key: PathBuf,
 }
 
 #[expect(clippy::doc_markdown, reason = "No Markdown for clap")]
 #[derive(Subcommand)]
 enum Commands {
     Agent {
-        /// Base URL of the Yeet Server
-        #[arg(short, long)]
-        url: Url,
-
         /// Seconds to wait between updates.
         /// Lower bound, may be higher between switching versions
         #[arg(short, long, default_value = "30")]
         sleep: u64,
     },
     /// Query the status of all or some (TODO) hosts [requires Admin credentials]
-    Status {
-        /// Base URL of the Yeet Server
-        #[arg(short, long)]
-        url: Url,
-
-        /// Path to the admin key
-        #[arg(long)]
-        key: PathBuf, // TODO: create a key selector
-    },
+    Status,
     /// Register a new host
     Register {
-        /// Base URL of the Yeet Server
-        #[arg(short, long)]
-        url: Url,
-
-        /// Path to the admin key
-        #[arg(long)]
-        key: PathBuf, // TODO: create a key selector
-
         /// Pub key of the client
         #[arg(long)]
         host_key: PathBuf,
@@ -71,16 +75,8 @@ enum Commands {
         #[arg(long)]
         name: Option<String>,
     },
-    /// Update a host
+    /// Update a host e.g. push a new store_path TODO: batch update
     Update {
-        /// Base URL of the Yeet Server
-        #[arg(short, long)]
-        url: Url,
-
-        /// Path to the admin key
-        #[arg(long)]
-        key: PathBuf, // TODO: create a key selector
-
         /// Pub key of the client
         #[arg(long)]
         host_key: PathBuf,
@@ -110,16 +106,25 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let xdg_dirs = xdg::BaseDirectories::with_prefix("yeet");
     let args = Yeet::try_parse()?;
+    let config: Config = Figment::new()
+        .merge(Serialized::defaults(args.config))
+        .merge(Toml::file(
+            xdg_dirs.find_config_file("agent.toml").unwrap_or_default(),
+        ))
+        .merge(Env::prefixed("YEET_"))
+        .extract()?;
     match args.command {
         Commands::VM { host, path } => run_vm(&path, &host)?,
-        Commands::Agent { url, sleep } => todo!(),
-        Commands::Status { key, url } => {
-            println!("{:?}", server::status(url, get_key(&key)?).await);
+        Commands::Agent { sleep } => todo!(),
+        Commands::Status => {
+            println!(
+                "{:?}",
+                server::status(config.url, get_key(&config.httpsig_key)?).await
+            );
         }
         Commands::Register {
-            url,
-            key,
             host_key,
             store_path,
             name,
@@ -127,8 +132,8 @@ async fn main() -> anyhow::Result<()> {
             println!(
                 "{:?}",
                 server::register(
-                    url,
-                    get_key(&key)?,
+                    config.url,
+                    get_key(&config.httpsig_key)?,
                     api::RegisterHost {
                         key: get_pub_key(&host_key)?,
                         store_path,
@@ -139,8 +144,6 @@ async fn main() -> anyhow::Result<()> {
             );
         }
         Commands::Update {
-            url,
-            key,
             host_key,
             store_path,
             public_key,
@@ -149,8 +152,8 @@ async fn main() -> anyhow::Result<()> {
             println!(
                 "{:?}",
                 server::update(
-                    url,
-                    get_key(&key)?,
+                    config.url,
+                    get_key(&config.httpsig_key)?,
                     api::HostUpdateRequest {
                         hosts: HashMap::from([(get_pub_key(&host_key)?, store_path)]),
                         public_key,

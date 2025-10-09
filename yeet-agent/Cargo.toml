@@ -27,6 +27,8 @@ httpsig-hyper = "0.0.19"
 tokio = { version = "1", features = ["full"] } # TODO: maybe switch to smoll?
 
 http = "1.3.1"
+figment = { version = "0.10", features = ["toml", "env"] }
+xdg = "3.0.0"
 
 
 [lints]
