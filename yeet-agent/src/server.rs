@@ -1,10 +1,11 @@
-use api::httpsig::ReqwestSig;
+use api::httpsig::ReqwestSig as _;
+use http::StatusCode;
 use httpsig_hyper::prelude::*;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use std::sync::LazyLock;
 use url::Url;
 
-use reqwest::{Client, IntoUrl, RequestBuilder, Response};
+use reqwest::{Client, Response};
 
 #[expect(clippy::expect_used, reason = "Is there another way?")]
 static COMPONENTS: LazyLock<Vec<message_component::HttpMessageComponentId>> = LazyLock::new(|| {
@@ -26,6 +27,22 @@ pub async fn status<K: SigningKey + Sync>(url: Url, key: K) -> anyhow::Result<Ve
         .await
 }
 
+pub async fn register<K: SigningKey + Sync>(
+    url: Url,
+    key: K,
+    register_host: api::RegisterHost,
+) -> anyhow::Result<StatusCode> {
+    Client::new()
+        .post(url.join("/system/register")?)
+        .json(&register_host)
+        .sign(&sig_param(&key)?, &key)
+        .await?
+        .send()
+        .await?
+        .error_for_code()
+        .await
+}
+
 fn sig_param<K: SigningKey + Sync>(key: &K) -> anyhow::Result<HttpSignatureParams> {
     let mut signature_params = HttpSignatureParams::try_new(&COMPONENTS)?;
     signature_params.set_key_info(key);
@@ -34,12 +51,21 @@ fn sig_param<K: SigningKey + Sync>(key: &K) -> anyhow::Result<HttpSignatureParam
 
 trait ErrorForJson {
     async fn error_for_json<T: DeserializeOwned>(self) -> anyhow::Result<T>;
+    async fn error_for_code(self) -> anyhow::Result<StatusCode>;
 }
 
 impl ErrorForJson for Response {
     async fn error_for_json<T: DeserializeOwned>(self) -> anyhow::Result<T> {
         if self.status().is_success() {
             Ok(self.json::<T>().await?)
+        } else {
+            Err(anyhow::anyhow!("{}: {}", self.status(), self.text().await?))
+        }
+    }
+
+    async fn error_for_code(self) -> anyhow::Result<StatusCode> {
+        if self.status().is_success() {
+            Ok(self.status())
         } else {
             Err(anyhow::anyhow!("{}: {}", self.status(), self.text().await?))
         }

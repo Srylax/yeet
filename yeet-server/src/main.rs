@@ -1,5 +1,6 @@
 //! Yeet that Config
 
+use crate::routes::register::register_host;
 // use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 // use crate::routes::update::update_hosts;
@@ -91,7 +92,7 @@ async fn main() {
 fn routes(state: Arc<RwLock<AppState>>) -> Router {
     Router::new()
         .route("/system/check", post(system_check))
-        // .route("/system/register", post(register_host))
+        .route("/system/register", post(register_host))
         // .route("/system/update", post(update_hosts))
         .route("/status", get(status::status))
         .with_state(state)

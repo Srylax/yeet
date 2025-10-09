@@ -11,8 +11,9 @@ use std::time::Duration;
 
 use anyhow::{Ok, Result, anyhow, bail};
 use clap::{Args, Parser, Subcommand, arg};
-use ed25519_dalek::SigningKey;
 use ed25519_dalek::ed25519::signature::SignerMut as _;
+use ed25519_dalek::pkcs8::DecodePublicKey;
+use ed25519_dalek::{SigningKey, VerifyingKey};
 use httpsig_hyper::prelude::{AlgorithmName, SecretKey};
 use log::{error, info};
 use notify_rust::Notification;
@@ -51,6 +52,28 @@ enum Commands {
         #[arg(long)]
         key: PathBuf, // TODO: create a key selector
     },
+    /// Register a new host
+    Register {
+        /// Base URL of the Yeet Server
+        #[arg(short, long)]
+        url: Url,
+
+        /// Path to the admin key
+        #[arg(long)]
+        key: PathBuf, // TODO: create a key selector
+
+        /// Pub key of the client
+        #[arg(long)]
+        host_key: PathBuf,
+
+        /// Store path of the first version
+        #[arg(long)]
+        store_path: String,
+
+        /// Pet name for the host
+        #[arg(long)]
+        name: Option<String>,
+    },
     /// Run you hosts inside a vm
     VM {
         /// NixOs host to run and build
@@ -71,12 +94,37 @@ async fn main() -> anyhow::Result<()> {
         Commands::Status { key, url } => {
             println!("{:?}", server::status(url, get_key(&key)?).await);
         }
+        Commands::Register {
+            url,
+            key,
+            host_key,
+            store_path,
+            name,
+        } => {
+            println!(
+                "{:?}",
+                server::register(
+                    url,
+                    get_key(&key)?,
+                    api::RegisterHost {
+                        key: get_pub_key(&host_key)?,
+                        store_path,
+                        name
+                    }
+                )
+                .await
+            );
+        }
     }
     Ok(())
 }
 
 fn get_key(path: &Path) -> anyhow::Result<SecretKey> {
     Ok(SecretKey::from_pem(&read_to_string(path)?)?)
+}
+
+fn get_pub_key(path: &Path) -> anyhow::Result<VerifyingKey> {
+    Ok(VerifyingKey::from_public_key_pem(&read_to_string(path)?)?)
 }
 
 #[cfg(false)]

@@ -45,6 +45,13 @@ pub struct Version {
     pub substitutor: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct RegisterHost {
+    pub key: VerifyingKey,
+    pub store_path: String,
+    pub name: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Host {
     pub name: Option<String>,

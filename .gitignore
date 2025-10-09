@@ -6,3 +6,4 @@ state.json
 dist
 book/book
 *.pem
+*.pub
