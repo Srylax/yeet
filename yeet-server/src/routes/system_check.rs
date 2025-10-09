@@ -19,7 +19,7 @@ pub async fn system_check(
     State(state): State<Arc<RwLock<AppState>>>,
     HttpSig(key): HttpSig,
     VerifiedJson(api::VersionRequest { store_path }): VerifiedJson<api::VersionRequest>,
-) -> Result<Json<api::VersionStatus>, (StatusCode, String)> {
+) -> Result<Json<api::HostState>, (StatusCode, String)> {
     let mut state = state.write_arc();
 
     let Some(host) = state.hosts.get_mut(&key) else {
@@ -27,12 +27,13 @@ pub async fn system_check(
     };
 
     // If the client did the update
-    if let api::VersionStatus::NewVersionAvailable(ref next_version) = host.status
+    if let api::HostState::Provisioned(api::ProvisionState::NewVersionAvailable(ref next_version)) =
+        host.status
         && next_version.store_path == store_path
     {
         // The versions match up
         host.store_path.clone_from(&store_path);
-        host.status = api::VersionStatus::UpToDate;
+        host.status = api::HostState::Provisioned(api::ProvisionState::UpToDate);
     }
 
     // Version mismatch -> this can happen when manually applying or when some tampers with the server
@@ -45,6 +46,16 @@ pub async fn system_check(
                 If you think this is a mistake, please update the version."
                 .to_owned(),
         ));
+    }
+
+    match host.status {
+        api::HostState::New => {
+            host.status = api::HostState::Provisioned(api::ProvisionState::UpToDate);
+        }
+        api::HostState::Detached => {
+            host.store_path = store_path;
+        }
+        api::HostState::Provisioned(ref _provision) => {}
     }
 
     host.last_ping = Some(Zoned::now());
@@ -107,10 +118,13 @@ mod test_system_check {
             .send()
             .await
             .unwrap()
-            .json::<api::VersionStatus>()
+            .json::<api::HostState>()
             .await
             .unwrap();
-        assert_eq!(response, api::VersionStatus::UpToDate);
+        assert_eq!(
+            response,
+            api::HostState::Provisioned(api::ProvisionState::UpToDate)
+        );
     }
 
     #[tokio::test]
@@ -123,11 +137,13 @@ mod test_system_check {
         let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
         let host = api::Host {
             store_path: "example_store_path".to_owned(),
-            status: api::VersionStatus::NewVersionAvailable(api::Version {
-                public_key: "pub_key".to_owned(),
-                store_path: "new_store_path".to_owned(),
-                substitutor: "substitutor".to_owned(),
-            }),
+            status: api::HostState::Provisioned(api::ProvisionState::NewVersionAvailable(
+                api::Version {
+                    public_key: "pub_key".to_owned(),
+                    store_path: "new_store_path".to_owned(),
+                    substitutor: "substitutor".to_owned(),
+                },
+            )),
             ..Default::default()
         };
         let mut state = AppState::default();
@@ -147,16 +163,88 @@ mod test_system_check {
             .send()
             .await
             .unwrap()
-            .json::<api::VersionStatus>()
+            .json::<api::HostState>()
             .await
             .unwrap();
         assert_eq!(
             response,
-            api::VersionStatus::NewVersionAvailable(api::Version {
+            api::HostState::Provisioned(api::ProvisionState::NewVersionAvailable(api::Version {
                 public_key: "pub_key".to_owned(),
                 store_path: "new_store_path".to_owned(),
                 substitutor: "substitutor".to_owned(),
-            })
+            }))
         );
+    }
+
+    #[tokio::test]
+    async fn new_to_uptodate() {
+        // Build Signature
+        let mut signature_params = HttpSignatureParams::try_new(&COMPONENTS).unwrap();
+        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, &SECRET_KEY_BYTES).unwrap();
+        signature_params.set_key_info(&signing_key);
+
+        let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
+        let host = api::Host {
+            store_path: "expected_store_path".to_owned(),
+            status: api::HostState::New,
+            ..Default::default()
+        };
+        let mut state = AppState::default();
+        state.hosts.insert(key.verifying_key(), host);
+        state.keys.insert(signing_key.key_id(), key.verifying_key());
+
+        let (server, _state) = test_server(state);
+
+        let response = server
+            .reqwest_post("/system/check")
+            .json(&api::VersionRequest {
+                store_path: "expected_store_path".to_owned(),
+            })
+            .sign(&signature_params, &signing_key)
+            .await
+            .unwrap()
+            .send()
+            .await
+            .unwrap()
+            .json::<api::HostState>()
+            .await
+            .unwrap();
+        assert_eq!(
+            response,
+            api::HostState::Provisioned(api::ProvisionState::UpToDate)
+        );
+    }
+
+    #[tokio::test]
+    async fn new_with_wrong_path() {
+        // Build Signature
+        let mut signature_params = HttpSignatureParams::try_new(&COMPONENTS).unwrap();
+        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, &SECRET_KEY_BYTES).unwrap();
+        signature_params.set_key_info(&signing_key);
+
+        let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
+        let host = api::Host {
+            store_path: "expected_store_path".to_owned(),
+            status: api::HostState::New,
+            ..Default::default()
+        };
+        let mut state = AppState::default();
+        state.hosts.insert(key.verifying_key(), host);
+        state.keys.insert(signing_key.key_id(), key.verifying_key());
+
+        let (mut server, _state) = test_server(state);
+        server.expect_failure();
+
+        server
+            .reqwest_post("/system/check")
+            .json(&api::VersionRequest {
+                store_path: "wrong_store_path".to_owned(),
+            })
+            .sign(&signature_params, &signing_key)
+            .await
+            .unwrap()
+            .send()
+            .await
+            .unwrap();
     }
 }

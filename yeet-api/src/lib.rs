@@ -47,38 +47,39 @@ pub struct Version {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Host {
+    pub name: Option<String>,
     pub key: VerifyingKey,
     pub last_ping: Option<Zoned>,
-    pub name: Option<String>,
-    pub status: VersionStatus,
+    pub status: HostState,
     pub store_path: StorePath,
+    // pub version_history: Vec<HostState>,
 }
 
+// State that the host is currently in
+#[expect(clippy::exhaustive_structs)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "API Structs should be breaking change"
-)]
-pub struct VersionRequest {
-    pub store_path: StorePath,
+pub enum HostState {
+    New,
+    Detached, // Does not really do anything yet
+    Provisioned(ProvisionState),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-/// Represents a Version Status
-#[expect(
-    clippy::exhaustive_enums,
-    reason = "API Structs should be breaking change"
-)]
-pub enum VersionStatus {
-    /// A new version is available - fetch and switch
-    NewVersionAvailable(Version),
-    /// The version is up-to-date - no action required
-    UpToDate,
-}
-
-impl Default for VersionStatus {
+impl Default for HostState {
     #[inline]
     fn default() -> Self {
-        Self::UpToDate
+        Self::New
     }
+}
+
+#[expect(clippy::exhaustive_structs)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ProvisionState {
+    UpToDate,
+    NewVersionAvailable(Version),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[expect(clippy::exhaustive_structs)]
+pub struct VersionRequest {
+    pub store_path: StorePath,
 }

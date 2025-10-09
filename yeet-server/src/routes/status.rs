@@ -58,7 +58,6 @@ mod test_status {
         let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
         // Just so we have some data
         let host = api::Host {
-            store_path: "example_store_path".to_owned(),
             ..Default::default()
         };
         state.hosts.insert(key.verifying_key(), host);
