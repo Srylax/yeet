@@ -9,10 +9,6 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use jiff::Zoned;
 use parking_lot::RwLock;
-use yeet_api::{
-    VersionRequest,
-    VersionStatus::{self, NewVersionAvailable, UpToDate},
-};
 
 /// This is the "ping" command every client should send in a specific interval.
 /// Updates are handeled implicitly. There is no seperate endpoint that the agent must call to inform the server of an update.
@@ -22,8 +18,8 @@ use yeet_api::{
 pub async fn system_check(
     State(state): State<Arc<RwLock<AppState>>>,
     HttpSig(key): HttpSig,
-    VerifiedJson(VersionRequest { store_path }): VerifiedJson<VersionRequest>,
-) -> Result<Json<VersionStatus>, (StatusCode, String)> {
+    VerifiedJson(api::VersionRequest { store_path }): VerifiedJson<api::VersionRequest>,
+) -> Result<Json<api::VersionStatus>, (StatusCode, String)> {
     let mut state = state.write_arc();
 
     let Some(host) = state.hosts.get_mut(&key) else {
@@ -31,12 +27,12 @@ pub async fn system_check(
     };
 
     // If the client did the update
-    if let NewVersionAvailable(ref next_version) = host.status
+    if let api::VersionStatus::NewVersionAvailable(ref next_version) = host.status
         && next_version.store_path == store_path
     {
         // The versions match up
         host.store_path.clone_from(&store_path);
-        host.status = UpToDate;
+        host.status = api::VersionStatus::UpToDate;
     }
 
     // Version mismatch -> this can happen when manually applying or when some tampers with the server
@@ -60,14 +56,14 @@ pub async fn system_check(
 mod test_system_check {
     use std::sync::LazyLock;
 
+    use api::httpsig::ReqwestSig as _;
     use ed25519_dalek::SigningKey;
     use httpsig_hyper::prelude::{
         AlgorithmName, HttpSignatureParams, SecretKey, SigningKey as _, message_component,
     };
-    use yeet_api::{Version, httpsig::ReqwestSig};
 
     use super::*;
-    use crate::{Host, test_server};
+    use crate::test_server;
 
     static SECRET_KEY_BYTES: [u8; 32] = [
         157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,
@@ -90,7 +86,7 @@ mod test_system_check {
         signature_params.set_key_info(&signing_key);
 
         let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
-        let host = Host {
+        let host = api::Host {
             store_path: "example_store_path".to_owned(),
             ..Default::default()
         };
@@ -102,7 +98,7 @@ mod test_system_check {
 
         let response = server
             .reqwest_post("/system/check")
-            .json(&VersionRequest {
+            .json(&api::VersionRequest {
                 store_path: "example_store_path".to_owned(),
             })
             .sign(&signature_params, &signing_key)
@@ -111,10 +107,10 @@ mod test_system_check {
             .send()
             .await
             .unwrap()
-            .json::<VersionStatus>()
+            .json::<api::VersionStatus>()
             .await
             .unwrap();
-        assert_eq!(response, VersionStatus::UpToDate);
+        assert_eq!(response, api::VersionStatus::UpToDate);
     }
 
     #[tokio::test]
@@ -125,9 +121,9 @@ mod test_system_check {
         signature_params.set_key_info(&signing_key);
 
         let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
-        let host = Host {
+        let host = api::Host {
             store_path: "example_store_path".to_owned(),
-            status: VersionStatus::NewVersionAvailable(Version {
+            status: api::VersionStatus::NewVersionAvailable(api::Version {
                 public_key: "pub_key".to_owned(),
                 store_path: "new_store_path".to_owned(),
                 substitutor: "substitutor".to_owned(),
@@ -142,7 +138,7 @@ mod test_system_check {
 
         let response = server
             .reqwest_post("/system/check")
-            .json(&VersionRequest {
+            .json(&api::VersionRequest {
                 store_path: "example_store_path".to_owned(),
             })
             .sign(&signature_params, &signing_key)
@@ -151,12 +147,12 @@ mod test_system_check {
             .send()
             .await
             .unwrap()
-            .json::<VersionStatus>()
+            .json::<api::VersionStatus>()
             .await
             .unwrap();
         assert_eq!(
             response,
-            VersionStatus::NewVersionAvailable(Version {
+            api::VersionStatus::NewVersionAvailable(api::Version {
                 public_key: "pub_key".to_owned(),
                 store_path: "new_store_path".to_owned(),
                 substitutor: "substitutor".to_owned(),

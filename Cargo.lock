@@ -746,12 +746,13 @@ dependencies = [
 
 [[package]]
 name = "ed25519-dalek"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a3daa8e81a3963a60642bcc1f90a670680bd4a77535faa384e9d1c79d620871"
+checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
+ "rand_core 0.6.4",
  "serde",
  "sha2",
  "subtle",
@@ -2326,7 +2327,7 @@ dependencies = [
  "once_cell",
  "socket2 0.5.10",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2451,7 +2452,6 @@ dependencies = [
  "cookie",
  "cookie_store",
  "encoding_rs",
- "futures-channel",
  "futures-core",
  "futures-util",
  "h2",
@@ -3841,12 +3841,14 @@ dependencies = [
  "ed25519-dalek",
  "env_logger",
  "http",
+ "httpsig-hyper",
  "log",
  "notify-rust",
  "reqwest",
  "serde",
  "serde_json",
  "ssh-key",
+ "tokio",
  "url",
  "yeet-api",
 ]
@@ -3879,10 +3881,10 @@ dependencies = [
  "mime",
  "parking_lot",
  "paste",
+ "rand_core 0.6.4",
  "serde",
  "serde_json",
  "serde_json_any_key",
- "ssh-key",
  "tokio",
  "uuid",
  "yeet-api",

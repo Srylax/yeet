@@ -47,7 +47,9 @@ pub struct Version {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Host {
+    pub key: VerifyingKey,
     pub last_ping: Option<Zoned>,
+    pub name: Option<String>,
     pub status: VersionStatus,
     pub store_path: StorePath,
 }

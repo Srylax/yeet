@@ -16,3 +16,4 @@ Create a new authtoken on cachix.
 
 `yeet publish --url localhost:3000 --cachix <name>`
 `yeet monitor`
+`yeet log mynixos`

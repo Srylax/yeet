@@ -1,7 +1,7 @@
 //! # Yeet Agent
 
 use std::env::current_dir;
-use std::fs::{File, read_link};
+use std::fs::{File, read_link, read_to_string};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -10,16 +10,16 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::{Ok, Result, anyhow, bail};
-use clap::{Parser, Subcommand, arg};
+use clap::{Args, Parser, Subcommand, arg};
 use ed25519_dalek::SigningKey;
 use ed25519_dalek::ed25519::signature::SignerMut as _;
+use httpsig_hyper::prelude::{AlgorithmName, SecretKey};
 use log::{error, info};
 use notify_rust::Notification;
-use reqwest::blocking::Client;
 use ssh_key::PrivateKey;
 use url::Url;
 use yeet_agent::nix::run_vm;
-use yeet_api::{Version, VersionRequest, VersionStatus};
+use yeet_agent::server;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -28,17 +28,9 @@ struct Yeet {
     command: Commands,
 }
 
+#[expect(clippy::doc_markdown, reason = "No Markdown for clap")]
 #[derive(Subcommand)]
 enum Commands {
-    /// Run you hosts inside a vm
-    VM {
-        /// NixOs host to run and build
-        #[arg(index = 1)]
-        host: String,
-        /// Path to flake
-        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
-        path: PathBuf,
-    },
     Agent {
         /// Base URL of the Yeet Server
         #[arg(short, long)]
@@ -49,15 +41,42 @@ enum Commands {
         #[arg(short, long, default_value = "30")]
         sleep: u64,
     },
+    /// Query the status of all or some (TODO) hosts [requires Admin credentials]
+    Status {
+        /// Base URL of the Yeet Server
+        #[arg(short, long)]
+        url: Url,
+
+        /// Path to the admin key
+        #[arg(long)]
+        key: PathBuf, // TODO: create a key selector
+    },
+    /// Run you hosts inside a vm
+    VM {
+        /// NixOs host to run and build
+        #[arg(index = 1)]
+        host: String,
+        /// Path to flake
+        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
+        path: PathBuf,
+    },
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args = Yeet::try_parse()?;
     match args.command {
         Commands::VM { host, path } => run_vm(&path, &host)?,
         Commands::Agent { url, sleep } => todo!(),
+        Commands::Status { key, url } => {
+            println!("{:?}", server::status(url, get_key(&key)?).await);
+        }
     }
     Ok(())
+}
+
+fn get_key(path: &Path) -> anyhow::Result<SecretKey> {
+    Ok(SecretKey::from_pem(&read_to_string(path)?)?)
 }
 
 #[cfg(false)]
@@ -117,7 +136,7 @@ fn trusted_public_keys() -> Result<Vec<String>> {
         .collect())
 }
 
-fn update(version: &Version) -> Result<()> {
+fn update(version: &api::Version) -> Result<()> {
     download(version)?;
     activate(version)?;
     Notification::new()
@@ -128,7 +147,7 @@ fn update(version: &Version) -> Result<()> {
     Ok(())
 }
 
-fn download(version: &Version) -> Result<()> {
+fn download(version: &api::Version) -> Result<()> {
     info!("Downloading {}", version.store_path);
     let mut keys = trusted_public_keys()?;
     keys.push(version.public_key.clone());
@@ -153,7 +172,7 @@ fn download(version: &Version) -> Result<()> {
     Ok(())
 }
 
-fn set_system_profile(version: &Version) -> Result<()> {
+fn set_system_profile(version: &api::Version) -> Result<()> {
     info!("Setting system profile to {}", version.store_path);
     let profile = Command::new("nix-env")
         .args([
@@ -170,7 +189,7 @@ fn set_system_profile(version: &Version) -> Result<()> {
 }
 
 #[cfg(target_os = "macos")]
-fn activate(version: &Version) -> Result<()> {
+fn activate(version: &api::Version) -> Result<()> {
     set_system_profile(version)?;
     info!("Activating {}", version.store_path);
     Command::new(Path::new(&version.store_path).join("activate")).spawn()?;

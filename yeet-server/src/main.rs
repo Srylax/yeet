@@ -5,7 +5,10 @@ use crate::routes::system_check::system_check;
 // use crate::routes::update::update_hosts;
 use axum::Router;
 use axum::routing::{get, post};
-use ed25519_dalek::VerifyingKey;
+use ed25519_dalek::pkcs8::EncodePrivateKey;
+use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
+use ed25519_dalek::{SigningKey, VerifyingKey};
+use httpsig_hyper::prelude::SigningKey as _;
 use jiff::Zoned;
 use parking_lot::RwLock;
 use routes::status;
@@ -18,8 +21,7 @@ use std::os::unix::prelude::FileExt as _;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
-use tokio::time::interval;
-use yeet_api::{StorePath, VersionStatus};
+use tokio::time::interval; // TODO: is this enough or do we need to use rand_chacha?
 
 mod error;
 mod httpsig;
@@ -35,15 +37,8 @@ struct AppState {
     admin_credentials: HashSet<VerifyingKey>,
     build_machines_credentials: HashSet<VerifyingKey>,
     #[serde(with = "any_key_map")]
-    hosts: HashMap<VerifyingKey, Host>,
+    hosts: HashMap<VerifyingKey, api::Host>,
     keys: HashMap<String, VerifyingKey>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
-struct Host {
-    last_ping: Option<Zoned>,
-    status: VersionStatus,
-    store_path: StorePath,
 }
 
 #[tokio::main]
@@ -61,6 +56,23 @@ async fn main() {
             rename("state.json", "state.json.old").expect("Could not move unreadable config");
             AppState::default()
         });
+
+    // TODO: make this interactive if interactive shell found
+    if state.admin_credentials.is_empty() {
+        println!("Creating new admin credentials");
+        let key = SigningKey::generate(&mut rand_core::OsRng);
+        let signing_key = httpsig_hyper::prelude::SecretKey::from_bytes(
+            httpsig_hyper::prelude::AlgorithmName::Ed25519,
+            key.as_bytes(),
+        )
+        .expect("Could not convert ED25519 key to httpsig key - wtf");
+
+        key.write_pkcs8_pem_file("yeet-admin.pem", LineEnding::LF)
+            .expect("Could not write the admin credential file");
+        println!("Written to file `yeet-admin.pem`");
+        state.admin_credentials.insert(key.verifying_key());
+        state.keys.insert(signing_key.key_id(), key.verifying_key());
+    }
 
     let state = Arc::new(RwLock::new(state));
     {

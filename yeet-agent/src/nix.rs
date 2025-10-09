@@ -5,6 +5,7 @@ use anyhow::{Ok, bail};
 // This command is used to run the virtual machine of a particular system
 // WARNING: currently is just shelling out. In future we need to valide if
 // the system is in the flake or not
+// TODO: split build and run into different parts
 pub fn run_vm(flake_path: &Path, system: &str) -> anyhow::Result<()> {
     let flake_path = flake_path.canonicalize()?; // Maybe check if its a dir and if it contains a flake.nix
     let flake_path = flake_path.to_string_lossy();

@@ -1,41 +1,35 @@
 use std::sync::Arc;
 
-use axum::{extract::State, http::StatusCode};
+use axum::{Json, extract::State, http::StatusCode};
 use parking_lot::RwLock;
-use serde_json_any_key::MapIterToJson as _;
 
-use crate::{AppState, error::WithStatusCode as _, httpsig::HttpSig};
+use crate::{AppState, httpsig::HttpSig};
 
 // Not able to return hosts as a struct because of the way HashMap is structured
 pub async fn status(
     State(state): State<Arc<RwLock<AppState>>>,
     HttpSig(key): HttpSig,
-) -> Result<String, (StatusCode, String)> {
+) -> Result<Json<Vec<api::Host>>, (StatusCode, String)> {
     if !state.read_arc().admin_credentials.contains(&key) {
         return Err((
             StatusCode::FORBIDDEN,
             "The request is authenticated but you lack admin credentials".to_owned(),
         ));
     }
-    state
-        .read_arc()
-        .hosts
-        .clone()
-        .to_json_map()
-        .with_code(StatusCode::INTERNAL_SERVER_ERROR)
+    Ok(Json(state.read_arc().hosts.values().cloned().collect()))
 }
 
 #[cfg(test)]
 mod test_status {
     use std::sync::LazyLock;
 
+    use api::httpsig::ReqwestSig as _;
     use ed25519_dalek::SigningKey;
     use httpsig_hyper::prelude::*;
     use httpsig_hyper::prelude::{HttpSignatureParams, SecretKey};
-    use yeet_api::httpsig::ReqwestSig as _;
 
     use super::*;
-    use crate::{Host, test_server};
+    use crate::test_server;
 
     static SECRET_KEY_BYTES: [u8; 32] = [
         157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,
@@ -63,7 +57,7 @@ mod test_status {
 
         let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
         // Just so we have some data
-        let host = Host {
+        let host = api::Host {
             store_path: "example_store_path".to_owned(),
             ..Default::default()
         };
@@ -82,11 +76,14 @@ mod test_status {
             .send()
             .await
             .unwrap()
-            .text()
+            .json::<Vec<api::Host>>()
             .await
             .unwrap();
 
-        assert_eq!(response, state.read().hosts.to_json_map().unwrap());
+        assert_eq!(
+            response,
+            state.read().hosts.values().cloned().collect::<Vec<_>>()
+        );
     }
 
     #[tokio::test]
