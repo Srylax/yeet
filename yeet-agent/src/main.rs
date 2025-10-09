@@ -1,15 +1,16 @@
 //! # Yeet Agent
 
+use std::env::current_dir;
 use std::fs::{File, read_link};
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str;
 use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::{Ok, Result, anyhow, bail};
-use clap::{Parser, arg};
+use clap::{Parser, Subcommand, arg};
 use ed25519_dalek::SigningKey;
 use ed25519_dalek::ed25519::signature::SignerMut as _;
 use log::{error, info};
@@ -17,30 +18,49 @@ use notify_rust::Notification;
 use reqwest::blocking::Client;
 use ssh_key::PrivateKey;
 use url::Url;
+use yeet_agent::nix::run_vm;
 use yeet_api::{Version, VersionRequest, VersionStatus};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Yeet {
-    /// Base URL of the Yeet Server
-    #[arg(short, long)]
-    url: Url,
-
-    /// Seconds to wait between updates.
-    /// Lower bound, may be higher between switching versions
-    #[arg(short, long, default_value = "30")]
-    sleep: u64,
+    #[command(subcommand)]
+    command: Commands,
 }
 
-fn main() -> ! {
-    env_logger::init();
-    loop {
-        if let Err(err) = main_loop() {
-            error!("{err}");
-        }
-        sleep(Duration::from_secs(60));
+#[derive(Subcommand)]
+enum Commands {
+    /// Run you hosts inside a vm
+    VM {
+        /// NixOs host to run and build
+        #[arg(index = 1)]
+        host: String,
+        /// Path to flake
+        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
+        path: PathBuf,
+    },
+    Agent {
+        /// Base URL of the Yeet Server
+        #[arg(short, long)]
+        url: Url,
+
+        /// Seconds to wait between updates.
+        /// Lower bound, may be higher between switching versions
+        #[arg(short, long, default_value = "30")]
+        sleep: u64,
+    },
+}
+
+fn main() -> anyhow::Result<()> {
+    let args = Yeet::try_parse()?;
+    match args.command {
+        Commands::VM { host, path } => run_vm(&path, &host)?,
+        Commands::Agent { url, sleep } => todo!(),
     }
+    Ok(())
 }
+
+#[cfg(false)]
 fn main_loop() -> Result<()> {
     let args = Yeet::try_parse()?;
     let check_url = args.url.join("system/check")?;

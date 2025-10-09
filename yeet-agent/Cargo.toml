@@ -18,7 +18,7 @@ yeet-api = { path = "../yeet-api" }
 anyhow = "1.0"
 url = { version = "2.5", features = ["serde"] }
 notify-rust = "4.11"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive","string"] }
 ssh-key = { version = "0.6", features = ["serde", "ed25519"] }
 ed25519-dalek = { version = "2.1", features = ["serde", "pem", "pkcs8"] }
 env_logger = "0.11"
