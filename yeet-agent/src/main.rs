@@ -3,24 +3,31 @@
 use std::collections::HashMap;
 use std::env::current_dir;
 use std::fs::{File, read_link, read_to_string};
+use std::hash::Hash;
 use std::io::{BufRead as _, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str;
 
 use anyhow::{Ok, Result, bail};
+use api::hash_hex;
 use clap::{Args, Parser, Subcommand, arg};
 use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::pkcs8::DecodePublicKey as _;
 use figment::Figment;
 use figment::providers::{Env, Format as _, Serialized, Toml};
 use httpsig_hyper::prelude::SecretKey;
+use jiff::Zoned;
+use lipgloss::{Color, Style};
+use lipgloss_extras::table::{Table, header_row_style};
 use log::info;
 use notify_rust::Notification;
 use serde::{Deserialize, Serialize};
 use url::Url;
 use yeet_agent::nix::run_vm;
 use yeet_agent::server;
+
+mod cli;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -119,10 +126,25 @@ async fn main() -> anyhow::Result<()> {
         Commands::VM { host, path } => run_vm(&path, &host)?,
         Commands::Agent { sleep } => todo!(),
         Commands::Status => {
-            println!(
-                "{:?}",
-                server::status(config.url, get_key(&config.httpsig_key)?).await
-            );
+            let status = server::status(config.url, get_key(&config.httpsig_key)?).await?;
+            let rows = status
+                .into_iter()
+                .map(|host| {
+                    vec![
+                        host.name.unwrap_or(hash_hex(host.key)),
+                        host.status.to_string(),
+                        hash_hex(host.store_path),
+                        host.last_ping.map_or("Never".to_owned(), |zoned| {
+                            format!("{:#}", &Zoned::now() - &zoned)
+                        }),
+                    ]
+                })
+                .collect::<Vec<_>>();
+
+            let t = cli::table()
+                .headers(vec!["NAME", "STATUS", "VERSION", "LAST SEEN"])
+                .rows(rows);
+            println!("{t}");
         }
         Commands::Register {
             host_key,
