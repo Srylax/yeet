@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io,
     path::Path,
     process::{Command, Stdio},
@@ -39,13 +40,13 @@ pub fn build_hosts(
     flake_path: &str,
     hosts: Vec<String>,
     darwin: bool,
-) -> anyhow::Result<Vec<String>> {
+) -> anyhow::Result<HashMap<String, String>> {
     let mut found_hosts = list_hosts(flake_path, darwin)?;
     // If empty build all
     if !hosts.is_empty() {
         found_hosts.retain_mut(|host| hosts.contains(host));
     }
-    let mut closures = Vec::with_capacity(found_hosts.len());
+    let mut closures = HashMap::with_capacity(found_hosts.len());
     for ref host in found_hosts {
         let system = if darwin {
             format!("{flake_path}#darwinConfigurations.{host}.system")
@@ -54,7 +55,7 @@ pub fn build_hosts(
         };
         let output = Command::new("nix")
             .args(["build", "--json", "--no-link", "--"])
-            .arg(system)
+            .arg(&system)
             .stdout(Stdio::piped())
             .spawn()?
             .wait_with_output()?;
@@ -62,7 +63,7 @@ pub fn build_hosts(
         let closure = build[0]["outputs"]["out"]
             .as_str()
             .ok_or(anyhow!("Build output did not contain a valid closure"))?;
-        closures.push(closure.to_owned());
+        closures.insert(host.clone(), closure.to_owned());
     }
     Ok(closures)
 }

@@ -45,12 +45,18 @@ pub struct ClapConfig {
     #[arg(long, global = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub httpsig_key: Option<PathBuf>, // TODO: create a key selector
+
+    /// Cachix cache name
+    #[arg(long, global = true)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cachix: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub url: Url,
     pub httpsig_key: PathBuf,
+    pub cachix: Option<String>,
 }
 
 #[expect(clippy::doc_markdown, reason = "No Markdown for clap")]
@@ -71,6 +77,15 @@ pub enum Commands {
         #[arg(long)]
         host: Vec<String>,
     },
+    /// Build and then publish some or all hosts in a flake
+    Publish {
+        /// Path to flake
+        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
+        path: PathBuf,
+        /// Hosts to build - default is all
+        #[arg(long)]
+        host: Vec<String>,
+    },
     /// Query the status of all or some (TODO) hosts [requires Admin credentials]
     Status,
     /// Register a new host
@@ -81,17 +96,17 @@ pub enum Commands {
 
         /// Store path of the first version
         #[arg(long)]
-        store_path: String,
+        store_path: Option<String>,
 
         /// Pet name for the host
         #[arg(long)]
-        name: Option<String>,
+        name: String,
     },
     /// Update a host e.g. push a new store_path TODO: batch update
     Update {
-        /// Pub key of the client
+        /// Name of the host
         #[arg(long)]
-        host_key: PathBuf,
+        host: String,
 
         /// The new store path
         #[arg(long)]

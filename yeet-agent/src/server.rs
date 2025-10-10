@@ -65,7 +65,7 @@ fn sig_param<K: SigningKey + Sync>(key: &K) -> anyhow::Result<HttpSignatureParam
     Ok(signature_params)
 }
 
-trait ErrorForJson {
+pub trait ErrorForJson {
     async fn error_for_json<T: DeserializeOwned>(self) -> anyhow::Result<T>;
     async fn error_for_code(self) -> anyhow::Result<StatusCode>;
 }

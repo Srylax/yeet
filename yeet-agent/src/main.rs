@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str;
 
-use anyhow::{Ok, Result, bail};
+use anyhow::{Ok, Result, anyhow, bail};
 use api::hash_hex;
 use clap::{Args, Parser, Subcommand, arg};
 use ed25519_dalek::VerifyingKey;
@@ -25,13 +25,14 @@ use notify_rust::Notification;
 use serde::{Deserialize, Serialize};
 use url::Url;
 use yeet_agent::nix::{self, run_vm};
-use yeet_agent::server;
+use yeet_agent::{cachix, server};
 
 use crate::cli::{Commands, Config, Yeet};
 
 mod cli;
 
 #[tokio::main]
+#[expect(clippy::too_many_lines)]
 async fn main() -> anyhow::Result<()> {
     let xdg_dirs = xdg::BaseDirectories::with_prefix("yeet");
     let args = Yeet::try_parse()?;
@@ -44,7 +45,6 @@ async fn main() -> anyhow::Result<()> {
         .extract()?;
     match args.command {
         Commands::Build { path, host } => {
-            // TODO: based on arch use darwin or nixos
             println!(
                 "{:?}",
                 nix::build_hosts(&path.to_string_lossy(), host, true)?
@@ -58,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
                 .into_iter()
                 .map(|host| {
                     vec![
-                        host.name.unwrap_or(hash_hex(host.key)),
+                        host.name,
                         host.status.to_string(),
                         hash_hex(host.store_path),
                         host.last_ping.map_or("Never".to_owned(), |zoned| {
@@ -67,7 +67,6 @@ async fn main() -> anyhow::Result<()> {
                     ]
                 })
                 .collect::<Vec<_>>();
-
             let t = cli::table()
                 .headers(vec!["NAME", "STATUS", "VERSION", "LAST SEEN"])
                 .rows(rows);
@@ -93,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
             );
         }
         Commands::Update {
-            host_key,
+            host,
             store_path,
             public_key,
             substitutor,
@@ -104,13 +103,39 @@ async fn main() -> anyhow::Result<()> {
                     config.url,
                     get_key(&config.httpsig_key)?,
                     api::HostUpdateRequest {
-                        hosts: HashMap::from([(get_pub_key(&host_key)?, store_path)]),
+                        hosts: HashMap::from([(host, store_path)]),
                         public_key,
                         substitutor
                     }
                 )
                 .await
             );
+        }
+        Commands::Publish { path, host } => {
+            let hosts = nix::build_hosts(&path.to_string_lossy(), host, true)?;
+            let cache_info = cachix::get_cachix_info(config.cachix.ok_or(anyhow!(
+                "Cachix cache name required. Set it in config or via the --cachix flag"
+            ))?)
+            .await?;
+
+            let public_key = cache_info
+                .public_signing_keys
+                .first()
+                .cloned()
+                .ok_or(anyhow!("Cachix cache has no public signing keys"))?;
+
+            cachix::push_paths(hosts.values(), cache_info.name).await?;
+
+            server::update(
+                config.url,
+                get_key(&config.httpsig_key)?,
+                api::HostUpdateRequest {
+                    hosts,
+                    public_key,
+                    substitutor: cache_info.uri,
+                },
+            )
+            .await?;
         }
     }
     Ok(())

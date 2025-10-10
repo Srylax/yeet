@@ -40,7 +40,7 @@ pub async fn register_host(
     }
 
     let host = api::Host {
-        store_path,
+        store_path: store_path.unwrap_or_default(),
         key,
         name: name.clone(),
         ..Default::default()
@@ -97,8 +97,7 @@ mod test_register {
             .reqwest_post("/system/register")
             .json(&api::RegisterHost {
                 key: key.verifying_key(),
-                store_path: "my_store_path".to_owned(),
-                name: String::new(),
+                ..Default::default()
             })
             .sign(&signature_params, &signing_key)
             .await
@@ -111,7 +110,6 @@ mod test_register {
         assert_eq!(
             state.hosts[&String::new()],
             api::Host {
-                store_path: "my_store_path".to_owned(),
                 key: key.verifying_key(),
                 ..Default::default()
             }
@@ -128,7 +126,6 @@ mod test_register {
         let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
         let mut state = AppState::default();
         let host = api::Host {
-            store_path: "my_store_path".to_owned(),
             ..Default::default()
         };
         state.hosts.insert(String::new(), host);
@@ -140,9 +137,7 @@ mod test_register {
         server
             .reqwest_post("/system/register")
             .json(&RegisterHost {
-                key: key.verifying_key(),
-                store_path: "my_store_path".to_owned(),
-                name: String::new(),
+                ..Default::default()
             })
             .sign(&signature_params, &signing_key)
             .await

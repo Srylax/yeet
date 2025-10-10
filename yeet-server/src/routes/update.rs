@@ -31,12 +31,18 @@ pub async fn update_hosts(
         ));
     }
 
-    let unknown_host = hosts
+    let unknown_hosts = hosts
         .iter()
-        .any(|(name, _)| !state.hosts.contains_key(name));
+        .filter(|(name, _)| !state.hosts.contains_key(*name))
+        .map(|(name, _)| name)
+        .cloned()
+        .collect::<Vec<_>>();
 
-    if unknown_host {
-        return Err((StatusCode::NOT_FOUND, "Host not found".to_owned()));
+    if !unknown_hosts.is_empty() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            format!("Hosts not found: {unknown_hosts:?}"),
+        ));
     }
 
     for (name, store_path) in hosts {

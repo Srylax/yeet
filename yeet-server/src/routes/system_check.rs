@@ -43,6 +43,12 @@ pub async fn system_check(
         host.status = api::HostState::Provisioned(api::ProvisionState::UpToDate);
     }
 
+    if host.status == api::HostState::New && host.store_path.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "This host has state new but has not yet an registered version".to_owned(),
+        ));
+    }
     // Version mismatch -> this can happen when manually applying or when some tampers with the server
     // In the future we may want to lock up the host for modifications if that happens
     // or at least warn an admin
