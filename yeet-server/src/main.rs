@@ -38,8 +38,10 @@ mod routes {
 struct AppState {
     admin_credentials: HashSet<VerifyingKey>,
     build_machines_credentials: HashSet<VerifyingKey>,
+    hosts: HashMap<String, api::Host>,
+    // Maps the public keys to the host names
     #[serde(with = "any_key_map")]
-    hosts: HashMap<VerifyingKey, api::Host>,
+    host_by_key: HashMap<VerifyingKey, String>,
     keys: HashMap<String, VerifyingKey>,
 }
 

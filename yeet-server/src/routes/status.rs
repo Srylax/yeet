@@ -60,7 +60,7 @@ mod test_status {
         let host = api::Host {
             ..Default::default()
         };
-        state.hosts.insert(key.verifying_key(), host);
+        state.hosts.insert("myhost".to_owned(), host);
         state.keys.insert(signing_key.key_id(), key.verifying_key());
         state.admin_credentials.insert(key.verifying_key()); // So we can access the data
 

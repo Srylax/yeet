@@ -32,7 +32,7 @@ pub async fn register_host(
         ));
     }
 
-    if state.hosts.contains_key(&key) {
+    if state.hosts.contains_key(&name) {
         return Err((
             StatusCode::BAD_REQUEST,
             "Host already registered".to_owned(),
@@ -42,11 +42,12 @@ pub async fn register_host(
     let host = api::Host {
         store_path,
         key,
-        name,
+        name: name.clone(),
         ..Default::default()
     };
 
-    state.hosts.insert(key, host);
+    state.hosts.insert(name.clone(), host);
+    state.host_by_key.insert(key, name);
 
     Ok(StatusCode::CREATED)
 }
@@ -97,7 +98,7 @@ mod test_register {
             .json(&api::RegisterHost {
                 key: key.verifying_key(),
                 store_path: "my_store_path".to_owned(),
-                name: None,
+                name: String::new(),
             })
             .sign(&signature_params, &signing_key)
             .await
@@ -108,7 +109,7 @@ mod test_register {
         let state = state.read_arc();
 
         assert_eq!(
-            state.hosts[&key.verifying_key()],
+            state.hosts[&String::new()],
             api::Host {
                 store_path: "my_store_path".to_owned(),
                 key: key.verifying_key(),
@@ -130,7 +131,7 @@ mod test_register {
             store_path: "my_store_path".to_owned(),
             ..Default::default()
         };
-        state.hosts.insert(key.verifying_key(), host);
+        state.hosts.insert(String::new(), host);
         state.keys.insert(signing_key.key_id(), key.verifying_key());
 
         let (mut server, _state) = test_server(state);
@@ -141,7 +142,7 @@ mod test_register {
             .json(&RegisterHost {
                 key: key.verifying_key(),
                 store_path: "my_store_path".to_owned(),
-                name: None,
+                name: String::new(),
             })
             .sign(&signature_params, &signing_key)
             .await

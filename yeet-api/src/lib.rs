@@ -21,9 +21,8 @@ pub type StorePath = String;
     reason = "API Structs should be breaking change"
 )]
 pub struct HostUpdateRequest {
-    /// The hosts to update identified by their public key
-    #[serde(with = "any_key_map")]
-    pub hosts: HashMap<VerifyingKey, StorePath>,
+    /// The hosts to update identified by their name
+    pub hosts: HashMap<String, StorePath>,
     /// The public key the agent should use to verify the update
     pub public_key: String,
     /// The substitutor the agent should use to fetch the update
@@ -51,12 +50,12 @@ pub struct Version {
 pub struct RegisterHost {
     pub key: VerifyingKey,
     pub store_path: String,
-    pub name: Option<String>,
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Host {
-    pub name: Option<String>,
+    pub name: String,
     pub key: VerifyingKey,
     pub last_ping: Option<Zoned>,
     pub status: HostState,

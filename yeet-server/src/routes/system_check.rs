@@ -22,8 +22,15 @@ pub async fn system_check(
 ) -> Result<Json<api::HostState>, (StatusCode, String)> {
     let mut state = state.write_arc();
 
-    let Some(host) = state.hosts.get_mut(&key) else {
+    let Some(host_name) = state.host_by_key.get(&key).cloned() else {
         return Err((StatusCode::NOT_FOUND, "Host not found".to_owned()));
+    };
+
+    let Some(host) = state.hosts.get_mut(host_name.clone().as_str()) else {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Host key found but no matching host entry".to_owned(),
+        ));
     };
 
     // If the client did the update
@@ -103,7 +110,8 @@ mod test_system_check {
         };
         let mut state = AppState::default();
         state.keys.insert(signing_key.key_id(), key.verifying_key());
-        state.hosts.insert(key.verifying_key(), host);
+        state.hosts.insert(String::new(), host);
+        state.host_by_key.insert(key.verifying_key(), String::new());
 
         let (server, _state) = test_server(state);
 
@@ -147,7 +155,8 @@ mod test_system_check {
             ..Default::default()
         };
         let mut state = AppState::default();
-        state.hosts.insert(key.verifying_key(), host);
+        state.hosts.insert(String::new(), host);
+        state.host_by_key.insert(key.verifying_key(), String::new());
         state.keys.insert(signing_key.key_id(), key.verifying_key());
 
         let (server, _state) = test_server(state);
@@ -190,7 +199,8 @@ mod test_system_check {
             ..Default::default()
         };
         let mut state = AppState::default();
-        state.hosts.insert(key.verifying_key(), host);
+        state.hosts.insert(String::new(), host);
+        state.host_by_key.insert(key.verifying_key(), String::new());
         state.keys.insert(signing_key.key_id(), key.verifying_key());
 
         let (server, _state) = test_server(state);
@@ -229,7 +239,8 @@ mod test_system_check {
             ..Default::default()
         };
         let mut state = AppState::default();
-        state.hosts.insert(key.verifying_key(), host);
+        state.hosts.insert(String::new(), host);
+        state.host_by_key.insert(key.verifying_key(), String::new());
         state.keys.insert(signing_key.key_id(), key.verifying_key());
 
         let (mut server, _state) = test_server(state);

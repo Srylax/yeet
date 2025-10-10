@@ -31,17 +31,19 @@ pub async fn update_hosts(
         ));
     }
 
-    let unknown_host = hosts.iter().any(|(key, _)| !state.hosts.contains_key(key));
+    let unknown_host = hosts
+        .iter()
+        .any(|(name, _)| !state.hosts.contains_key(name));
 
     if unknown_host {
         return Err((StatusCode::NOT_FOUND, "Host not found".to_owned()));
     }
 
-    for (key, store_path) in hosts {
-        let host = state
-            .hosts
-            .get_mut(&key)
-            .ok_or((StatusCode::NOT_FOUND, "Host not found".to_owned()))?;
+    for (name, store_path) in hosts {
+        let host = state.hosts.get_mut(&name).ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Host key found but no matching entry ".to_owned(),
+        ))?;
         let version = api::Version {
             store_path: store_path.clone(),
             substitutor: substitutor.clone(),
@@ -59,7 +61,7 @@ mod test_update {
     use std::{collections::HashMap, sync::LazyLock};
 
     use api::httpsig::ReqwestSig;
-    use ed25519_dalek::{SigningKey, VerifyingKey, ed25519::signature::SignerMut};
+    use ed25519_dalek::SigningKey;
     use httpsig_hyper::prelude::{
         AlgorithmName, HttpSignatureParams, SecretKey, SigningKey as _, message_component,
     };
@@ -88,17 +90,18 @@ mod test_update {
         let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, &SECRET_KEY_BYTES).unwrap();
         signature_params.set_key_info(&signing_key);
 
-        let mut key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
+        let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
         let host = api::Host::default();
         let mut state = AppState::default();
-        state.hosts.insert(VerifyingKey::default(), host);
+        state.hosts.insert(String::new(), host);
+        state.host_by_key.insert(key.verifying_key(), String::new());
         state.build_machines_credentials.insert(key.verifying_key());
         state.keys.insert(signing_key.key_id(), key.verifying_key());
 
         let (server, state) = test_server(state);
 
         let request = api::HostUpdateRequest {
-            hosts: HashMap::from([(VerifyingKey::default(), "new_path".to_owned())]),
+            hosts: HashMap::from([(String::new(), "new_path".to_owned())]),
             public_key: "p_key".to_owned(),
             substitutor: "sub".to_owned(),
         };
@@ -115,7 +118,7 @@ mod test_update {
         let state = state.read_arc();
 
         assert_eq!(
-            state.hosts[&VerifyingKey::default()].status,
+            state.hosts[&String::new()].status,
             api::HostState::Provisioned(api::ProvisionState::NewVersionAvailable(api::Version {
                 store_path: "new_path".to_owned(),
                 substitutor: "sub".to_owned(),
