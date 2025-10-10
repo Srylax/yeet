@@ -55,8 +55,13 @@ pub async fn update_hosts(
             substitutor: substitutor.clone(),
             public_key: public_key.clone(),
         };
-        host.status =
-            api::HostState::Provisioned(api::ProvisionState::NewVersionAvailable(version));
+
+        if host.store_path.is_empty() {
+            host.store_path = store_path;
+        } else {
+            host.status =
+                api::HostState::Provisioned(api::ProvisionState::NewVersionAvailable(version));
+        }
     }
 
     Ok(StatusCode::CREATED)

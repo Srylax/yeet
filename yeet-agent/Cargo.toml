@@ -29,8 +29,6 @@ tokio = { version = "1", features = ["full"] } # TODO: maybe switch to smoll?
 http = "1.3.1"
 figment = { version = "0.10", features = ["toml", "env"] }
 xdg = "3.0.0"
-lipgloss = "0.1.0"
-lipgloss-extras = { version = "0.1.0", features = ["tables"] }
 jiff = {version = "0.2", features = []}
 
 

@@ -18,14 +18,12 @@ use figment::Figment;
 use figment::providers::{Env, Format as _, Serialized, Toml};
 use httpsig_hyper::prelude::SecretKey;
 use jiff::Zoned;
-use lipgloss::{Color, Style};
-use lipgloss_extras::table::{Table, header_row_style};
 use log::info;
 use notify_rust::Notification;
 use serde::{Deserialize, Serialize};
 use url::Url;
 use yeet_agent::nix::{self, run_vm};
-use yeet_agent::{cachix, server};
+use yeet_agent::{cachix, display, server};
 
 use crate::cli::{Commands, Config, Yeet};
 
@@ -56,21 +54,10 @@ async fn main() -> anyhow::Result<()> {
             let status = server::status(config.url, get_key(&config.httpsig_key)?).await?;
             let rows = status
                 .into_iter()
-                .map(|host| {
-                    vec![
-                        host.name,
-                        host.status.to_string(),
-                        hash_hex(host.store_path),
-                        host.last_ping.map_or("Never".to_owned(), |zoned| {
-                            format!("{:#}", &Zoned::now() - &zoned)
-                        }),
-                    ]
-                })
-                .collect::<Vec<_>>();
-            let t = cli::table()
-                .headers(vec!["NAME", "STATUS", "VERSION", "LAST SEEN"])
-                .rows(rows);
-            println!("{t}");
+                .map(|host| display::host(&host))
+                .collect::<Result<Vec<_>>>()?;
+
+            println!("{}", rows.join("\n"));
         }
         Commands::Register {
             host_key,

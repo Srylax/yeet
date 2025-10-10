@@ -1,6 +1,5 @@
 //! API for yeet
 
-use derive_more::Display;
 use jiff::Zoned;
 use serde_json_any_key::any_key_map;
 use std::collections::{HashMap, HashSet};
@@ -29,14 +28,13 @@ pub struct HostUpdateRequest {
     pub substitutor: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 /// Represents a Version
 /// Each Version can have its own nix cache
 #[expect(
     clippy::exhaustive_structs,
     reason = "API Structs should be breaking change"
 )]
-#[display("{}", hash_hex(store_path))]
 pub struct Version {
     /// The public key the cache uses to sign the store path
     pub public_key: String,
@@ -65,7 +63,7 @@ pub struct Host {
 
 // State that the host is currently in
 #[expect(clippy::exhaustive_structs)]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum HostState {
     New,
     Detached, // Does not really do anything yet
@@ -80,14 +78,13 @@ impl Default for HostState {
 }
 
 #[expect(clippy::exhaustive_structs)]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ProvisionState {
     UpToDate,
-    #[display("Update Available: {_0}")]
     NewVersionAvailable(Version),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[expect(clippy::exhaustive_structs)]
 pub struct VersionRequest {
     pub store_path: StorePath,
