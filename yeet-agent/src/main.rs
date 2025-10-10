@@ -24,7 +24,7 @@ use log::info;
 use notify_rust::Notification;
 use serde::{Deserialize, Serialize};
 use url::Url;
-use yeet_agent::nix::run_vm;
+use yeet_agent::nix::{self, run_vm};
 use yeet_agent::server;
 
 mod cli;
@@ -65,6 +65,15 @@ enum Commands {
         /// Lower bound, may be higher between switching versions
         #[arg(short, long, default_value = "30")]
         sleep: u64,
+    },
+    /// Build some or all hosts in a flake
+    Build {
+        /// Path to flake
+        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
+        path: PathBuf,
+        /// Hosts to build - default is all
+        #[arg(long)]
+        host: Vec<String>,
     },
     /// Query the status of all or some (TODO) hosts [requires Admin credentials]
     Status,
@@ -123,6 +132,13 @@ async fn main() -> anyhow::Result<()> {
         .merge(Env::prefixed("YEET_"))
         .extract()?;
     match args.command {
+        Commands::Build { path, host } => {
+            // TODO: based on arch use darwin or nixos
+            println!(
+                "{:?}",
+                nix::build_hosts(&path.to_string_lossy(), host, true)?
+            );
+        }
         Commands::VM { host, path } => run_vm(&path, &host)?,
         Commands::Agent { sleep } => todo!(),
         Commands::Status => {

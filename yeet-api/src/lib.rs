@@ -84,7 +84,7 @@ impl Default for HostState {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
 pub enum ProvisionState {
     UpToDate,
-    #[display("New Version: {_0}")]
+    #[display("Update Available: {_0}")]
     NewVersionAvailable(Version),
 }
 
