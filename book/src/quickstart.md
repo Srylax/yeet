@@ -14,6 +14,6 @@ Create a new authtoken on cachix.
 `yeet status`
 *Edit the file my-nixos/configuration.nix and add ripgrep*:
 
-`yeet publish --url localhost:3000 --cachix <name>`
+`yeet publish --cachix <name>`
 `yeet monitor`
 `yeet log mynixos`
