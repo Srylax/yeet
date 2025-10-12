@@ -16,7 +16,7 @@ static COMPONENTS: LazyLock<Vec<message_component::HttpMessageComponentId>> = La
         .expect("Could not create HTTP Signature components")
 });
 
-pub async fn status<K: SigningKey + Sync>(url: Url, key: K) -> anyhow::Result<Vec<api::Host>> {
+pub async fn status<K: SigningKey + Sync>(url: &Url, key: K) -> anyhow::Result<Vec<api::Host>> {
     Client::new()
         .get(url.join("/status")?)
         .sign(&sig_param(&key)?, &key)
@@ -28,7 +28,7 @@ pub async fn status<K: SigningKey + Sync>(url: Url, key: K) -> anyhow::Result<Ve
 }
 
 pub async fn register<K: SigningKey + Sync>(
-    url: Url,
+    url: &Url,
     key: K,
     register_host: api::RegisterHost,
 ) -> anyhow::Result<StatusCode> {
@@ -44,7 +44,7 @@ pub async fn register<K: SigningKey + Sync>(
 }
 
 pub async fn update<K: SigningKey + Sync>(
-    url: Url,
+    url: &Url,
     key: K,
     host_update_request: api::HostUpdateRequest,
 ) -> anyhow::Result<StatusCode> {

@@ -22,6 +22,7 @@ use log::info;
 use notify_rust::Notification;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use yeet_agent::display::diff_inline;
 use yeet_agent::nix::{self, run_vm};
 use yeet_agent::{cachix, display, server};
 
@@ -51,32 +52,27 @@ async fn main() -> anyhow::Result<()> {
         Commands::VM { host, path } => run_vm(&path, &host)?,
         Commands::Agent { sleep } => todo!(),
         Commands::Status => {
-            let status = server::status(config.url, get_key(&config.httpsig_key)?).await?;
-            let rows = status
-                .into_iter()
-                .map(|host| display::host(&host))
-                .collect::<Result<Vec<_>>>()?;
-
-            println!("{}", rows.join("\n"));
+            println!("{}", status_string(&config.url, &config.httpsig_key).await?);
         }
         Commands::Register {
             host_key,
             store_path,
             name,
         } => {
-            println!(
-                "{:?}",
-                server::register(
-                    config.url,
-                    get_key(&config.httpsig_key)?,
-                    api::RegisterHost {
-                        key: get_pub_key(&host_key)?,
-                        store_path,
-                        name
-                    }
-                )
-                .await
-            );
+            let before = status_string(&config.url, &config.httpsig_key).await?;
+
+            server::register(
+                &config.url,
+                get_key(&config.httpsig_key)?,
+                api::RegisterHost {
+                    key: get_pub_key(&host_key)?,
+                    store_path,
+                    name,
+                },
+            )
+            .await;
+            let after = status_string(&config.url, &config.httpsig_key).await?;
+            println!("{}", diff_inline(&before, &after));
         }
         Commands::Update {
             host,
@@ -84,21 +80,23 @@ async fn main() -> anyhow::Result<()> {
             public_key,
             substitutor,
         } => {
-            println!(
-                "{:?}",
-                server::update(
-                    config.url,
-                    get_key(&config.httpsig_key)?,
-                    api::HostUpdateRequest {
-                        hosts: HashMap::from([(host, store_path)]),
-                        public_key,
-                        substitutor
-                    }
-                )
-                .await
-            );
+            let before = status_string(&config.url, &config.httpsig_key).await?;
+            server::update(
+                &config.url,
+                get_key(&config.httpsig_key)?,
+                api::HostUpdateRequest {
+                    hosts: HashMap::from([(host, store_path)]),
+                    public_key,
+                    substitutor,
+                },
+            )
+            .await;
+            let after = status_string(&config.url, &config.httpsig_key).await?;
+            println!("{}", diff_inline(&before, &after));
         }
         Commands::Publish { path, host } => {
+            let before = status_string(&config.url, &config.httpsig_key).await?;
+
             let hosts = nix::build_hosts(&path.to_string_lossy(), host, true)?;
             let cache_info = cachix::get_cachix_info(config.cachix.ok_or(anyhow!(
                 "Cachix cache name required. Set it in config or via the --cachix flag"
@@ -114,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
             cachix::push_paths(hosts.values(), cache_info.name).await?;
 
             server::update(
-                config.url,
+                &config.url,
                 get_key(&config.httpsig_key)?,
                 api::HostUpdateRequest {
                     hosts,
@@ -123,9 +121,21 @@ async fn main() -> anyhow::Result<()> {
                 },
             )
             .await?;
+            let after = status_string(&config.url, &config.httpsig_key).await?;
+            println!("{}", diff_inline(&before, &after));
         }
     }
     Ok(())
+}
+
+async fn status_string(url: &Url, httpsig_key: &Path) -> anyhow::Result<String> {
+    let status = server::status(url, get_key(httpsig_key)?).await?;
+    let rows = status
+        .into_iter()
+        .map(|host| display::host(&host))
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(rows.join("\n"))
 }
 
 fn get_key(path: &Path) -> anyhow::Result<SecretKey> {
