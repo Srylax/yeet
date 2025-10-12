@@ -71,17 +71,14 @@ pub fn diff_inline<T: similar::DiffableStrRef + ?Sized>(old: &T, new: &T) -> Str
     let mut output = String::new();
 
     for op in diff.ops() {
-        let change = diff
-            .iter_changes(op)
-            .map(|c| c.to_string_lossy())
-            .collect::<Vec<_>>();
-
         let change = match op {
             DiffOp::Replace { .. } => {
                 let mut replace_output = String::new();
                 let diffs = diff.iter_changes(op).collect::<Vec<_>>();
                 for index in 0..diffs.len() {
                     let change = diffs.get(index).unwrap();
+                    // we need the change from insert -> deleted so that we can input the arrow
+                    // This is because each word is a change and not only the before / after
                     let next = diffs.get(index + 1).unwrap_or(change);
 
                     let styled_output = match change.tag() {
@@ -90,15 +87,28 @@ pub fn diff_inline<T: similar::DiffableStrRef + ?Sized>(old: &T, new: &T) -> Str
                         ChangeTag::Insert => style(change.to_string_lossy()).green().to_string(),
                     };
                     replace_output.push_str(styled_output.as_str());
+                    // if the tag (+/-) changes we input an arrow
                     if change.tag() != next.tag() {
                         replace_output.push_str(" -> ");
                     }
                 }
                 replace_output
             }
-            DiffOp::Equal { .. } => change.join(""),
-            DiffOp::Delete { .. } => style(change.join("")).red().to_string(),
-            DiffOp::Insert { .. } => style(change.join("")).green().to_string(),
+            // This branch means it does not have an equivalent in the new text
+            DiffOp::Equal { .. } | DiffOp::Delete { .. } | DiffOp::Insert { .. } => {
+                let change = diff
+                    .iter_changes(op)
+                    .map(|c| c.to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join("");
+                if matches!(op, DiffOp::Delete { .. }) {
+                    style(change).red().to_string()
+                } else if matches!(op, DiffOp::Insert { .. }) {
+                    style(change).green().to_string()
+                } else {
+                    change
+                }
+            }
         };
         output.push_str(change.as_str());
     }
