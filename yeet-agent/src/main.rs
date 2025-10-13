@@ -1,26 +1,21 @@
 //! # Yeet Agent
 
 use std::collections::HashMap;
-use std::env::current_dir;
 use std::fs::{File, read_link, read_to_string};
-use std::hash::Hash;
 use std::io::{BufRead as _, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::str;
 
 use anyhow::{Ok, Result, anyhow, bail};
-use api::hash_hex;
-use clap::{Args, Parser, Subcommand, arg};
+use clap::Parser as _;
 use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::pkcs8::DecodePublicKey as _;
 use figment::Figment;
 use figment::providers::{Env, Format as _, Serialized, Toml};
 use httpsig_hyper::prelude::SecretKey;
-use jiff::Zoned;
 use log::info;
 use notify_rust::Notification;
-use serde::{Deserialize, Serialize};
 use url::Url;
 use yeet_agent::display::diff_inline;
 use yeet_agent::nix::{self, run_vm};
@@ -40,6 +35,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(Toml::file(
             xdg_dirs.find_config_file("agent.toml").unwrap_or_default(),
         ))
+        .merge(Toml::file(".config/yeet.toml"))
         .merge(Env::prefixed("YEET_"))
         .extract()?;
     match args.command {
