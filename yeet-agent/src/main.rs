@@ -46,7 +46,11 @@ async fn main() -> anyhow::Result<()> {
         Commands::Build { path, host } => {
             println!(
                 "{:?}",
-                nix::build_hosts(&path.to_string_lossy(), host, true)?
+                nix::build_hosts(
+                    &path.to_string_lossy(),
+                    host,
+                    std::env::consts::ARCH == "aarch64"
+                )?
             );
         }
         Commands::VM { host, path } => run_vm(&path, &host)?,
@@ -97,7 +101,16 @@ async fn main() -> anyhow::Result<()> {
         Commands::Publish { path, host } => {
             let before = status_string(&config.url, &config.httpsig_key).await?;
 
-            let hosts = nix::build_hosts(&path.to_string_lossy(), host, true)?;
+            let hosts = nix::build_hosts(
+                &path.to_string_lossy(),
+                host,
+                std::env::consts::ARCH == "aarch64",
+            )?;
+
+            if hosts.is_empty() {
+                bail!("No hosts found - did you commit your files?")
+            }
+
             let cache_info = cachix::get_cachix_info(config.cachix.ok_or(anyhow!(
                 "Cachix cache name required. Set it in config or via the --cachix flag"
             ))?)
@@ -109,6 +122,7 @@ async fn main() -> anyhow::Result<()> {
                 .cloned()
                 .ok_or(anyhow!("Cachix cache has no public signing keys"))?;
 
+            println!("{hosts:?}");
             cachix::push_paths(hosts.values(), cache_info.name).await?;
 
             server::update(

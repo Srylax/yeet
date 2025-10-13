@@ -10,10 +10,10 @@ Create a new authtoken on cachix.
 
 `yeet-server`
 
-`yeet vm mynixos`
+You check out your current build with `yeet vm my-nixos` (only for nixos not for darwin)
 `yeet status`
 *Edit the file my-nixos/configuration.nix and add ripgrep*:
 
 `yeet publish --cachix <name>`
-`yeet monitor`
-`yeet log mynixos`
+`yeet monitor` [TODO]
+`yeet log mynixos` [TODO]
