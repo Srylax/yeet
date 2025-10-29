@@ -71,14 +71,14 @@ pub enum Commands {
     Register {
         /// Pub key of the client
         #[arg(long)]
-        host_key: PathBuf,
+        host_key: Option<PathBuf>,
 
         /// Store path of the first version
         #[arg(long)]
         store_path: Option<String>,
 
         /// Pet name for the host
-        #[arg(long)]
+        #[arg(index = 1)]
         name: String,
     },
     /// Update a host e.g. push a new store_path TODO: batch update

@@ -46,7 +46,7 @@ pub struct Version {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct RegisterHost {
-    pub key: VerifyingKey,
+    pub key: Option<VerifyingKey>,
     pub store_path: Option<String>,
     pub name: String,
 }
@@ -54,11 +54,38 @@ pub struct RegisterHost {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Host {
     pub name: String,
-    pub key: VerifyingKey,
+    pub key: Key, // Can also be Default 0. But then it would not be in the registered keys
     pub last_ping: Option<Zoned>,
     pub status: HostState,
-    pub store_path: StorePath,
-    // pub version_history: Vec<HostState>,
+    pub store_path: StorePath, // Can be empty - maybe change that in the future
+                               // pub version_history: Vec<HostState>,
+}
+
+// Currently i do not like that you can be in state Provisioned and unverified
+// At the same time. Mixing these state would solve this but then I would have
+// to make the key an optional whis is also ugly
+// maybe a new struct UnverifiedHost is needed
+#[expect(clippy::exhaustive_structs)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum Key {
+    Verified(VerifyingKey),
+    Unverified,
+}
+
+impl From<Option<VerifyingKey>> for Key {
+    fn from(value: Option<VerifyingKey>) -> Self {
+        match value {
+            Some(key) => Self::Verified(key),
+            None => Self::Unverified,
+        }
+    }
+}
+
+impl Default for Key {
+    #[inline]
+    fn default() -> Self {
+        Self::Unverified
+    }
 }
 
 // State that the host is currently in

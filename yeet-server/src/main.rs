@@ -4,6 +4,8 @@ use crate::routes::register::register_host;
 // use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 use crate::routes::update::update_hosts;
+use crate::routes::verify::is_host_verified;
+use crate::state::AppState;
 // use crate::routes::update::update_hosts;
 use axum::Router;
 use axum::routing::{get, post};
@@ -27,22 +29,13 @@ use tokio::time::interval; // TODO: is this enough or do we need to use rand_cha
 
 mod error;
 mod httpsig;
+mod state;
 mod routes {
     pub mod register;
     pub mod status;
     pub mod system_check;
     pub mod update;
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Default)]
-struct AppState {
-    admin_credentials: HashSet<VerifyingKey>,
-    build_machines_credentials: HashSet<VerifyingKey>,
-    hosts: HashMap<String, api::Host>,
-    // Maps the public keys to the host names
-    #[serde(with = "any_key_map")]
-    host_by_key: HashMap<VerifyingKey, String>,
-    keys: HashMap<String, VerifyingKey>,
+    pub mod verify;
 }
 
 #[tokio::main]
@@ -62,20 +55,13 @@ async fn main() {
         });
 
     // TODO: make this interactive if interactive shell found
-    if state.admin_credentials.is_empty() {
+    if !state.has_admin_credential() {
         println!("Creating new admin credentials");
         let key = SigningKey::generate(&mut rand_core::OsRng);
-        let signing_key = httpsig_hyper::prelude::SecretKey::from_bytes(
-            httpsig_hyper::prelude::AlgorithmName::Ed25519,
-            key.as_bytes(),
-        )
-        .expect("Could not convert ED25519 key to httpsig key - wtf");
-
         key.write_pkcs8_pem_file("yeet-admin.pem", LineEnding::LF)
             .expect("Could not write the admin credential file");
         println!("Written to file `yeet-admin.pem`");
-        state.admin_credentials.insert(key.verifying_key());
-        state.keys.insert(signing_key.key_id(), key.verifying_key());
+        state.add_admin_credential(key.verifying_key())
     }
 
     let state = Arc::new(RwLock::new(state));
@@ -97,6 +83,8 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .route("/system/check", post(system_check))
         .route("/system/register", post(register_host))
         .route("/system/update", post(update_hosts))
+        // .route("/system/verify", post(verify_hosts))
+        // .route("/system/verify", get(is_host_verified))
         .route("/status", get(status::status))
         .with_state(state)
 }

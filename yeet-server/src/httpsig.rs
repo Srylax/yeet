@@ -46,9 +46,7 @@ impl FromRequestParts<Arc<RwLock<AppState>>> for HttpSig {
             .try_read()
             .ok_or("Internal State currently not available - try again later")
             .with_code(StatusCode::INTERNAL_SERVER_ERROR)?
-            .keys
-            .get(keyid)
-            .copied()
+            .get_key_by_id(keyid)
         else {
             return Err((
                 StatusCode::BAD_REQUEST,

@@ -6,6 +6,7 @@ use crate::{
 };
 use axum::extract::State;
 use axum::http::StatusCode;
+use httpsig_hyper::prelude::{AlgorithmName, SecretKey, SigningKey as _};
 use parking_lot::RwLock;
 
 /// Register a new host with the server.
@@ -41,13 +42,19 @@ pub async fn register_host(
 
     let host = api::Host {
         store_path: store_path.unwrap_or_default(),
-        key,
+        key: key.into(),
         name: name.clone(),
         ..Default::default()
     };
 
     state.hosts.insert(name.clone(), host);
-    state.host_by_key.insert(key, name);
+    if let Some(key) = key {
+        state.host_by_key.insert(key, name);
+        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
+            .expect("Verifying key already is validated");
+
+        state.keys.insert(signing_key.key_id(), key);
+    }
 
     Ok(StatusCode::CREATED)
 }
@@ -96,7 +103,7 @@ mod test_register {
         server
             .reqwest_post("/system/register")
             .json(&api::RegisterHost {
-                key: key.verifying_key(),
+                key: Some(key.verifying_key()),
                 ..Default::default()
             })
             .sign(&signature_params, &signing_key)
@@ -110,7 +117,7 @@ mod test_register {
         assert_eq!(
             state.hosts[&String::new()],
             api::Host {
-                key: key.verifying_key(),
+                key: api::Key::Verified(key.verifying_key()),
                 ..Default::default()
             }
         );

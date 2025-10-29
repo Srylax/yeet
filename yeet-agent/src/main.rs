@@ -61,16 +61,22 @@ async fn main() -> anyhow::Result<()> {
         } => {
             let before = status_string(&config.url, &config.httpsig_key).await?;
 
+            let key = if let Some(key) = host_key {
+                Some(get_pub_key(&key)?)
+            } else {
+                None
+            };
+
             server::register(
                 &config.url,
                 get_key(&config.httpsig_key)?,
                 api::RegisterHost {
-                    key: get_pub_key(&host_key)?,
+                    key,
                     store_path,
                     name,
                 },
             )
-            .await;
+            .await?;
             let after = status_string(&config.url, &config.httpsig_key).await?;
             println!("{}", diff_inline(&before, &after));
         }
@@ -274,7 +280,7 @@ fn activate(version: &api::Version) -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn activate(version: &Version) -> Result<()> {
+fn activate(version: &api::Version) -> Result<()> {
     info!("Activating {}", version.store_path);
     set_system_profile(version)?;
     Command::new(Path::new(&version.store_path).join("bin/switch-to-configuration"))

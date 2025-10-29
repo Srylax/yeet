@@ -32,12 +32,17 @@ pub fn host(host: &api::Host) -> anyhow::Result<String> {
         }
     };
 
+    let key_status = match host.key {
+        api::Key::Verified(_) => "",
+        api::Key::Unverified => " (Unverified)",
+    };
+
     let mut w = Vec::new();
-    writeln!(&mut w, "[{status_emoji}] {}{status}", host.name)?;
+    writeln!(&mut w, "[{status_emoji}] {}{status}{key_status}", host.name)?;
 
     if host.store_path.is_empty() {
         ensure!(host.last_ping == None);
-        writeln!(&mut w, " • Version: Host not rolled out ⏳",)?;
+        writeln!(&mut w, " • Version: Host not rolled out",)?;
     } else {
         writeln!(&mut w, " • Version: {}", hash_hex(&host.store_path))?;
     }
@@ -55,11 +60,9 @@ pub fn host(host: &api::Host) -> anyhow::Result<String> {
     writeln!(
         &mut w,
         " • Last Seen: {}",
-        host.last_ping
-            .clone()
-            .map_or("Never ⏳".to_owned(), |zoned| {
-                format!("{:#}", &Zoned::now() - &zoned)
-            })
+        host.last_ping.clone().map_or("Never".to_owned(), |zoned| {
+            format!("{:#}", &Zoned::now() - &zoned)
+        })
     )?;
 
     Ok(String::from_utf8(w)?)
