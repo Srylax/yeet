@@ -69,13 +69,17 @@ pub enum Commands {
     Status,
     /// Register a new host
     Register {
-        /// Pub key of the client
-        #[arg(long)]
-        host_key: Option<PathBuf>,
-
         /// Store path of the first version
         #[arg(long)]
         store_path: Option<String>,
+
+        /// The public key the agent should use to verify the update
+        #[arg(long)]
+        public_key: Option<String>,
+
+        /// The substitutor the agent should use to fetch the update
+        #[arg(long)]
+        substitutor: Option<String>,
 
         /// Pet name for the host
         #[arg(index = 1)]

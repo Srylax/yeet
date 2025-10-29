@@ -46,8 +46,7 @@ pub struct Version {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct RegisterHost {
-    pub key: Option<VerifyingKey>,
-    pub store_path: Option<String>,
+    pub provision_state: ProvisionState,
     pub name: String,
 }
 
@@ -61,10 +60,11 @@ pub struct RegisterHost {
 //
 //
 // client.version requires key.set
+// key.set requires client.version
 //
 //
 // (key.nothing, client.nothing, server.nothing | server.version | server.detached)
-// (key.set, client.nothing | client.version, server.nothing | server.version | server.detached)
+// (key.set, client.version, server.nothing | server.version | server.detached)
 //
 // a struct with the following maps represets all possible states
 //
@@ -75,70 +75,113 @@ pub struct RegisterHost {
 // the requirements that a host (name) cannot have a client.state without a key is upheld
 // Further there are no shenanigans between the states. A consumer now gets the client state and it is either there or not
 //
-// struct Hosts {
-//     server_state: HashMap<String, ServerState>,
-//     keys: HashMap<String, VerifyingKey>,
-//     client_state: HashMap<VerifyingKey, Vec<(StorePath, Zoned)>>,
-//     last_ping: HashMap<VerifyingKey, Option<Zoned>>,
-// }
+// And now we can even remove the name because that is now just extra information
+// We only need the following association key -> id
+// but key is not available at the start so we require name and bind and id to it
+// Id is a word with many prejudice so lets use handle
+//
+// key -> handle
+// handle -> server.state
+// key -> client.state
+//
+//
+// new_key_type! { struct HostHandle; }
+// Everything that a host should only ever have once provisioned is stored under a KeyHandle
+// Things that are extra information and should always be accessible are under the HostHandle
+// pub struct Hosts {
+//     keyids: HashMap<String, VerifyingKey>, // These are registred keys used by httpsig - we need a hashmap because we have no way to store a handle - keyid is derived
 
-// enum ServerState {
-//     NotSet,
-//     Provisioned(StorePath),
-//     Detached,
+//     keys: SlotMap<HostHandle, VerifyingKey>,
+//     client_state: SecondaryMap<HostHandle, Vec<(StorePath, Zoned)>>, // Client should only have a state with a key
+//     last_ping: SecondaryMap<HostHandle, Option<Zoned>>,
+//     server_state: SecondaryMap<HostHandle, ServerState>,
+//     names: SecondaryMap<HostHandle, String>,
+
+//     unregistered: Vec<String>,
 // }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Host {
     pub name: String,
-    pub key: Key, // Can also be Default 0. But then it would not be in the registered keys
-    pub last_ping: Option<Zoned>,
-    pub status: HostState,
-    pub store_path: StorePath, // Can be empty - maybe change that in the future
-                               // pub version_history: Vec<HostState>,
+    pub last_ping: Zoned,
+    pub provision_state: ProvisionState,
+    // Version with date when the update occured
+    pub version_history: Vec<(StorePath, Zoned)>,
 }
 
-// Currently i do not like that you can be in state Provisioned and unverified
-// At the same time. Mixing these state would solve this but then I would have
-// to make the key an optional whis is also ugly
-// maybe a new struct UnverifiedHost is needed
-#[expect(clippy::exhaustive_structs)]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum Key {
-    Verified(VerifyingKey),
-    Unverified,
-}
+impl Host {
+    pub fn latest_store_path(&self) -> &StorePath {
+        &self
+            .version_history
+            .last()
+            .expect("version_history cannot be empty")
+            .0
+    }
+    pub fn update_store_path(&mut self, store_path: String) {
+        self.version_history.push((store_path, Zoned::now()));
+    }
 
-impl From<Option<VerifyingKey>> for Key {
-    fn from(value: Option<VerifyingKey>) -> Self {
-        match value {
-            Some(key) => Self::Verified(key),
-            None => Self::Unverified,
+    pub fn push_update(&mut self, version: Version) {
+        if self.is_provisioned() {
+            self.provision_state = ProvisionState::Provisioned(version);
+        }
+    }
+
+    pub fn ping(&mut self) {
+        self.last_ping = Zoned::now();
+    }
+
+    // pub fn provision_store_path(&self) -> Option<&String> {
+    //     match self.provision_state {
+    //         ProvisionState::NotSet | ProvisionState::Detached => None,
+    //         ProvisionState::Provisioned(ref store_path) => Some(store_path),
+    //     }
+    // }
+
+    pub fn is_detached(&self) -> bool {
+        match self.provision_state {
+            ProvisionState::NotSet | ProvisionState::Provisioned(_) => false,
+            ProvisionState::Detached => true,
+        }
+    }
+
+    pub fn is_provisioned(&self) -> bool {
+        match self.provision_state {
+            ProvisionState::Provisioned(_) => true,
+            ProvisionState::NotSet | ProvisionState::Detached => false,
         }
     }
 }
 
-impl Default for Key {
+// State the Server wants the client to be in
+#[expect(clippy::exhaustive_structs)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ProvisionState {
+    NotSet,
+    Detached,
+    Provisioned(Version),
+}
+
+impl Default for ProvisionState {
     #[inline]
     fn default() -> Self {
-        Self::Unverified
+        Self::NotSet
     }
 }
 
-// State that the host is currently in
+// Action the server want the client to take
 #[expect(clippy::exhaustive_structs)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum HostState {
-    New,
-    Detached, // Does not really do anything yet
-    UpToDate,
-    NewVersionAvailable(Version),
+pub enum AgentAction {
+    Nothing,
+    Detach,
+    SwitchTo(Version),
 }
 
-impl Default for HostState {
+impl Default for AgentAction {
     #[inline]
     fn default() -> Self {
-        Self::New
+        Self::Nothing
     }
 }
 

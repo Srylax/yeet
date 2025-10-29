@@ -27,6 +27,7 @@ mod cli;
 
 #[tokio::main]
 #[expect(clippy::too_many_lines)]
+#[expect(clippy::unwrap_in_result)]
 async fn main() -> anyhow::Result<()> {
     let xdg_dirs = xdg::BaseDirectories::with_prefix("yeet");
     let args = Yeet::try_parse()?;
@@ -55,24 +56,31 @@ async fn main() -> anyhow::Result<()> {
             println!("{}", status_string(&config.url, &config.httpsig_key).await?);
         }
         Commands::Register {
-            host_key,
             store_path,
             name,
+            public_key,
+            substitutor,
         } => {
             let before = status_string(&config.url, &config.httpsig_key).await?;
 
-            let key = if let Some(key) = host_key {
-                Some(get_pub_key(&key)?)
+            let provision_state = if let Some(store_path) = store_path
+                && let Some(public_key) = public_key
+                && let Some(substitutor) = substitutor
+            {
+                api::ProvisionState::Provisioned(api::Version {
+                    public_key,
+                    store_path,
+                    substitutor,
+                })
             } else {
-                None
+                api::ProvisionState::NotSet
             };
 
             server::register(
                 &config.url,
                 get_key(&config.httpsig_key)?,
                 api::RegisterHost {
-                    key,
-                    store_path,
+                    provision_state,
                     name,
                 },
             )

@@ -1,117 +1,15 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{Json, extract::State};
 use parking_lot::RwLock;
 
-use crate::{AppState, httpsig::HttpSig};
+use crate::{AppState, httpsig::HttpSig, state::StateError};
 
 // Not able to return hosts as a struct because of the way HashMap is structured
 pub async fn status(
     State(state): State<Arc<RwLock<AppState>>>,
     HttpSig(key): HttpSig,
-) -> Result<Json<Vec<api::Host>>, (StatusCode, String)> {
-    if !state.read_arc().admin_credentials.contains(&key) {
-        return Err((
-            StatusCode::FORBIDDEN,
-            "The request is authenticated but you lack admin credentials".to_owned(),
-        ));
-    }
-    Ok(Json(state.read_arc().hosts.values().cloned().collect()))
-}
-
-#[cfg(test)]
-mod test_status {
-    use std::sync::LazyLock;
-
-    use api::httpsig::ReqwestSig as _;
-    use ed25519_dalek::SigningKey;
-    use httpsig_hyper::prelude::*;
-    use httpsig_hyper::prelude::{HttpSignatureParams, SecretKey};
-
-    use super::*;
-    use crate::test_server;
-
-    static SECRET_KEY_BYTES: [u8; 32] = [
-        157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,
-        105, 123, 50, 105, 25, 112, 59, 172, 3, 28, 174, 127, 96,
-    ];
-
-    static COMPONENTS: LazyLock<Vec<message_component::HttpMessageComponentId>> =
-        LazyLock::new(|| {
-            ["date", "@path", "@method", "content-digest"]
-                .iter()
-                .map(|component| message_component::HttpMessageComponentId::try_from(*component))
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap()
-        });
-
-    #[tokio::test]
-    async fn state() {
-        // Build Signature
-        let mut signature_params = HttpSignatureParams::try_new(&COMPONENTS).unwrap();
-        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, &SECRET_KEY_BYTES).unwrap();
-        signature_params.set_key_info(&signing_key);
-
-        // Build State
-        let mut state = AppState::default();
-
-        let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
-        // Just so we have some data
-        let host = api::Host {
-            ..Default::default()
-        };
-        state.hosts.insert("myhost".to_owned(), host);
-        state.keys.insert(signing_key.key_id(), key.verifying_key());
-        state.admin_credentials.insert(key.verifying_key()); // So we can access the data
-
-        let (server, state) = test_server(state);
-
-        // Build Request
-        let response = server
-            .reqwest_get("/status")
-            .sign(&signature_params, &signing_key)
-            .await
-            .unwrap()
-            .send()
-            .await
-            .unwrap()
-            .json::<Vec<api::Host>>()
-            .await
-            .unwrap();
-
-        assert_eq!(
-            response,
-            state.read().hosts.values().cloned().collect::<Vec<_>>()
-        );
-    }
-
-    #[tokio::test]
-    async fn non_admin() {
-        // Build Signature
-        let mut signature_params = HttpSignatureParams::try_new(&COMPONENTS).unwrap();
-        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, &SECRET_KEY_BYTES).unwrap();
-        signature_params.set_key_info(&signing_key);
-
-        // Build State
-        let mut state = AppState::default();
-
-        let key = SigningKey::from_bytes(&SECRET_KEY_BYTES);
-        state.keys.insert(signing_key.key_id(), key.verifying_key());
-
-        let (mut server, _state) = test_server(state);
-        server.expect_failure(); // We expect a 403
-
-        // Build Request
-        let response = server
-            .reqwest_get("/status")
-            .sign(&signature_params, &signing_key)
-            .await
-            .unwrap()
-            .send()
-            .await
-            .unwrap()
-            .status();
-
-        assert_eq!(response, StatusCode::FORBIDDEN);
-    }
+) -> Result<Json<Vec<api::Host>>, StateError> {
+    state.read_arc().auth_admin(&key)?;
+    Ok(Json(state.read_arc().hosts().cloned().collect()))
 }

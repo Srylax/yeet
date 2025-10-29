@@ -16,53 +16,34 @@ use similar::{ChangeTag, DiffOp, TextDiff};
 // }
 
 pub fn host(host: &api::Host) -> anyhow::Result<String> {
-    let status_emoji = match host.status {
-        api::HostState::New => "✨",
-        api::HostState::Detached => "🫥",
-        api::HostState::Provisioned(api::ProvisionState::UpToDate) => "✅",
-        api::HostState::Provisioned(api::ProvisionState::NewVersionAvailable(_)) => "🔄",
-    };
-
-    let status = match host.status {
-        api::HostState::New => " (New)",
-        api::HostState::Detached => " (Detached)",
-        api::HostState::Provisioned(api::ProvisionState::UpToDate) => " (Latest)",
-        api::HostState::Provisioned(api::ProvisionState::NewVersionAvailable(_)) => {
-            " (Will Update)"
-        }
-    };
-
-    let key_status = match host.key {
-        api::Key::Verified(_) => "",
-        api::Key::Unverified => " (Unverified)",
+    let status = match host.provision_state {
+        api::ProvisionState::NotSet => " (NotSet)",
+        api::ProvisionState::Detached => " (Detached)",
+        api::ProvisionState::Provisioned(_) => " (Provisioned)",
     };
 
     let mut w = Vec::new();
-    writeln!(&mut w, "[{status_emoji}] {}{status}{key_status}", host.name)?;
+    writeln!(&mut w, " {}{status}", host.name)?;
 
-    if host.store_path.is_empty() {
-        ensure!(host.last_ping == None);
-        writeln!(&mut w, " • Version: Host not rolled out",)?;
-    } else {
-        writeln!(&mut w, " • Version: {}", hash_hex(&host.store_path))?;
-    }
+    writeln!(
+        &mut w,
+        " • Version: {}",
+        hash_hex(&host.latest_store_path())
+    )?;
 
-    if let api::HostState::Provisioned(api::ProvisionState::NewVersionAvailable(ref next_version)) =
-        host.status
-    {
-        writeln!(
-            &mut w,
-            " • Next Version: {}",
-            hash_hex(&next_version.store_path)
-        )?;
-    }
+    // TODO: write this new maybe some login on the host itself like host.is_latest()
+    // if let api::ProvisionState::NewVersionAvailable(ref next_version) = host.provision_state {
+    //     writeln!(
+    //         &mut w,
+    //         " • Next Version: {}",
+    //         hash_hex(&next_version.store_path)
+    //     )?;
+    // }
 
     writeln!(
         &mut w,
         " • Last Seen: {}",
-        host.last_ping.clone().map_or("Never".to_owned(), |zoned| {
-            format!("{:#}", &Zoned::now() - &zoned)
-        })
+        format!("{:#}", &Zoned::now() - &host.last_ping)
     )?;
 
     Ok(String::from_utf8(w)?)
