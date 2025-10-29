@@ -51,6 +51,43 @@ pub struct RegisterHost {
     pub name: String,
 }
 
+// values that are needed at start:
+// - name
+// possible states: (we need to track 3 different states) key state, server state, client state
+//
+// key: nothing | set
+// server: nothing | version | detached
+// client: nothing | version
+//
+//
+// client.version requires key.set
+//
+//
+// (key.nothing, client.nothing, server.nothing | server.version | server.detached)
+// (key.set, client.nothing | client.version, server.nothing | server.version | server.detached)
+//
+// a struct with the following maps represets all possible states
+//
+// name -> key
+// name -> server.state
+// key -> client.state
+//
+// the requirements that a host (name) cannot have a client.state without a key is upheld
+// Further there are no shenanigans between the states. A consumer now gets the client state and it is either there or not
+//
+// struct Hosts {
+//     server_state: HashMap<String, ServerState>,
+//     keys: HashMap<String, VerifyingKey>,
+//     client_state: HashMap<VerifyingKey, Vec<(StorePath, Zoned)>>,
+//     last_ping: HashMap<VerifyingKey, Option<Zoned>>,
+// }
+
+// enum ServerState {
+//     NotSet,
+//     Provisioned(StorePath),
+//     Detached,
+// }
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Host {
     pub name: String,
@@ -94,7 +131,8 @@ impl Default for Key {
 pub enum HostState {
     New,
     Detached, // Does not really do anything yet
-    Provisioned(ProvisionState),
+    UpToDate,
+    NewVersionAvailable(Version),
 }
 
 impl Default for HostState {
@@ -102,13 +140,6 @@ impl Default for HostState {
     fn default() -> Self {
         Self::New
     }
-}
-
-#[expect(clippy::exhaustive_structs)]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum ProvisionState {
-    UpToDate,
-    NewVersionAvailable(Version),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
