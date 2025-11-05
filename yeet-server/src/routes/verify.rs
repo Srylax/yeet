@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 /// The goal is to no longer require the pub key at registration of the host.
 /// Rather any unauthenticated client can try an `verification_attempt` and supply his public key.
 /// This then generates a six digit number which the admin has to retrieve from the client (not the server!)
@@ -12,6 +14,7 @@ use axum::http::StatusCode;
 
 use crate::httpsig::HttpSig;
 
+/// That is literally it because the `HttpSig` extractor checks if the key is in the keyids
 pub async fn is_host_verified(HttpSig(_http_key): HttpSig) -> StatusCode {
     StatusCode::OK
 }

@@ -61,7 +61,7 @@ async fn main() {
         key.write_pkcs8_pem_file("yeet-admin.pem", LineEnding::LF)
             .expect("Could not write the admin credential file");
         println!("Written to file `yeet-admin.pem`");
-        state.add_admin_credential(key.verifying_key())
+        state.add_admin_key(key.verifying_key())
     }
 
     let state = Arc::new(RwLock::new(state));
@@ -84,7 +84,7 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .route("/system/register", post(register_host))
         .route("/system/update", post(update_hosts))
         // .route("/system/verify", post(verify_hosts))
-        // .route("/system/verify", get(is_host_verified))
+        .route("/system/verify", get(is_host_verified))
         .route("/status", get(status::status))
         .with_state(state)
 }

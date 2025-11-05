@@ -49,15 +49,6 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn register_host(&mut self, host: Host, key: VerifyingKey) {
-        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
-            .expect("Verifying key already is validated");
-        self.key_by_name.insert(host.name.clone(), key);
-        self.hosts.insert(key, host);
-
-        self.keyids.insert(signing_key.key_id(), key);
-    }
-
     pub fn pre_register_host(
         &mut self,
         name: String,
@@ -171,6 +162,10 @@ impl AppState {
         Ok(())
     }
 
+    fn host_by_name_mut(&mut self, host: &String) -> Option<&mut Host> {
+        self.hosts.get_mut(self.key_by_name.get(host)?)
+    }
+
     pub fn auth_build(&self, key: &VerifyingKey) -> Result<()> {
         if self.admin_credentials.contains(key) || self.build_machines_credentials.contains(key) {
             Ok(())
@@ -179,6 +174,7 @@ impl AppState {
         }
     }
 
+    // lol maybe add something for that
     pub fn add_build(&mut self, key: VerifyingKey) {
         let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
             .expect("Verifying key already is validated");
@@ -194,39 +190,21 @@ impl AppState {
         }
     }
 
-    pub fn add_admin(&mut self, key: VerifyingKey) {
-        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
-            .expect("Verifying key already is validated");
-        self.admin_credentials.insert(key);
-        self.keyids.insert(signing_key.key_id(), key);
-    }
-
-    pub fn contains_host(&self, host: &String) -> bool {
-        self.key_by_name.contains_key(host)
-    }
-
     pub(crate) fn hosts(&self) -> hash_map::Values<'_, VerifyingKey, api::Host> {
         self.hosts.values()
     }
 
-    fn host_by_name_mut(&mut self, host: &String) -> Option<&mut Host> {
-        self.key_by_name
-            .get(host)
-            .and_then(|key| self.hosts.get_mut(key))
-    }
-
-    pub fn add_admin_credential(&mut self, key: VerifyingKey) {
-        let signing_key = httpsig_hyper::prelude::SecretKey::from_bytes(
-            httpsig_hyper::prelude::AlgorithmName::Ed25519,
-            key.as_bytes(),
-        )
-        .expect("Could not convert ED25519 key to httpsig key - wtf");
+    pub fn add_admin_key(&mut self, key: VerifyingKey) {
+        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
+            .expect("Could not convert ED25519 key to httpsig key - wtf");
         self.admin_credentials.insert(key);
         self.keyids.insert(signing_key.key_id(), key);
     }
+
     pub fn has_admin_credential(&self) -> bool {
         !self.admin_credentials.is_empty()
     }
+
     pub fn get_key_by_id<S: AsRef<str>>(&self, keyid: S) -> Option<VerifyingKey> {
         self.keyids.get(keyid.as_ref()).copied()
     }
