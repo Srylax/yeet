@@ -41,6 +41,14 @@ pub enum StateError {
     #[error("Key already in an verification attempt")]
     #[status(StatusCode::BAD_REQUEST)]
     KeyPendingVerification,
+
+    #[error("Verification attempt with code {0} not found")]
+    #[status(StatusCode::BAD_REQUEST)]
+    AttemptNotFound(u32),
+
+    #[error("There is no host `{0} pre registered`")]
+    #[status(StatusCode::BAD_REQUEST)]
+    PreRegisterNotFound(String),
 }
 
 type Result<T> = core::result::Result<T, StateError>;
@@ -57,7 +65,7 @@ pub struct AppState {
     // Maps name to the public key
     key_by_name: HashMap<String, VerifyingKey>,
     // 6 digit number -> unverified pub key
-    verification_attempt: HashMap<u32, (VerifyingKey, Zoned)>,
+    verification_attempt: HashMap<u32, (api::VerificationAttempt, Zoned)>,
 
     // A list of hosts ready for registration
     pre_register_host: HashMap<String, api::ProvisionState>,
@@ -82,22 +90,54 @@ impl AppState {
         });
     }
 
-    pub fn add_verification_attempt(&mut self, key: VerifyingKey) -> Result<u32> {
+    pub fn add_verification_attempt(&mut self, attempt: api::VerificationAttempt) -> Result<u32> {
         self.drain_verification_attempts();
         if self.verification_attempt.len() >= 10 {
             return Err(StateError::TooManyVerificationAttempts);
         }
 
-        if self.verification_attempt.values().any(|(k, _z)| k == &key) {
+        if self
+            .verification_attempt
+            .values()
+            .any(|(k, _z)| &k.key == &attempt.key)
+        {
             return Err(StateError::KeyPendingVerification);
         }
 
         let verification = rand::rng().next_u32();
 
         self.verification_attempt
-            .insert(verification, (key, Zoned::now()));
+            .insert(verification, (attempt, Zoned::now()));
 
         Ok(verification)
+    }
+
+    pub fn verify_attempt(&mut self, acceptance: api::VerificationAcceptance) -> Result<()> {
+        self.drain_verification_attempts();
+        let Some((attempt, first_ping)) = self.verification_attempt.remove(&acceptance.code) else {
+            return Err(StateError::AttemptNotFound(acceptance.code));
+        };
+
+        let Some(state) = self.pre_register_host.remove(&acceptance.host_name) else {
+            return Err(StateError::PreRegisterNotFound(acceptance.host_name));
+        };
+
+        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, attempt.key.as_bytes())
+            .expect("Verifying key already is validated");
+
+        self.key_by_name
+            .insert(acceptance.host_name.clone(), attempt.key);
+        self.hosts.insert(
+            attempt.key,
+            api::Host {
+                name: acceptance.host_name,
+                last_ping: first_ping.clone(),
+                provision_state: state,
+                version_history: vec![(attempt.store_path, first_ping)],
+            },
+        );
+        self.keyids.insert(signing_key.key_id(), attempt.key);
+        Ok(())
     }
 
     /// This is the "ping" command every client should send in a specific interval.

@@ -50,6 +50,18 @@ pub struct RegisterHost {
     pub name: String,
 }
 
+#[derive(Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct VerificationAttempt {
+    pub key: VerifyingKey,
+    pub store_path: StorePath,
+}
+
+#[derive(Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct VerificationAcceptance {
+    pub code: u32,
+    pub host_name: String,
+}
+
 // values that are needed at start:
 // - name
 // possible states: (we need to track 3 different states) key state, server state, client state

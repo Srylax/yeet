@@ -10,6 +10,7 @@ pub async fn status(
     State(state): State<Arc<RwLock<AppState>>>,
     HttpSig(key): HttpSig,
 ) -> Result<Json<Vec<api::Host>>, StateError> {
-    state.read_arc().auth_admin(&key)?;
-    Ok(Json(state.read_arc().hosts().cloned().collect()))
+    let state = state.read_arc();
+    state.auth_admin(&key)?;
+    Ok(Json(state.hosts().cloned().collect()))
 }
