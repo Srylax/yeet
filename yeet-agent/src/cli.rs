@@ -56,6 +56,32 @@ pub enum Commands {
         #[arg(long)]
         host: Vec<String>,
     },
+
+    /// Query the status of all or some (TODO) hosts [requires Admin credentials]
+    Status,
+
+    /// Run you hosts inside a vm
+    VM {
+        /// NixOs host to run and build
+        #[arg(index = 1)]
+        host: String,
+        /// Path to flake
+        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
+        path: PathBuf,
+    },
+
+    /// These are the raw subcommands to execute functions on the server
+    Server(ServerArgs),
+}
+
+#[derive(Args)]
+pub struct ServerArgs {
+    #[command(subcommand)]
+    pub command: ServerCommands,
+}
+
+#[derive(Subcommand)]
+pub enum ServerCommands {
     /// Build and then publish some or all hosts in a flake
     Publish {
         /// Path to flake
@@ -64,26 +90,6 @@ pub enum Commands {
         /// Hosts to build - default is all
         #[arg(long)]
         host: Vec<String>,
-    },
-    /// Query the status of all or some (TODO) hosts [requires Admin credentials]
-    Status,
-    /// Register a new host
-    Register {
-        /// Store path of the first version
-        #[arg(long)]
-        store_path: Option<String>,
-
-        /// The public key the agent should use to verify the update
-        #[arg(long)]
-        public_key: Option<String>,
-
-        /// The substitutor the agent should use to fetch the update
-        #[arg(long)]
-        substitutor: Option<String>,
-
-        /// Pet name for the host
-        #[arg(index = 1)]
-        name: String,
     },
     /// Update a host e.g. push a new store_path TODO: batch update
     Update {
@@ -103,13 +109,22 @@ pub enum Commands {
         #[arg(long)]
         substitutor: String,
     },
-    /// Run you hosts inside a vm
-    VM {
-        /// NixOs host to run and build
+    /// Register a new host
+    Register {
+        /// Store path of the first version
+        #[arg(long)]
+        store_path: Option<String>,
+
+        /// The public key the agent should use to verify the update
+        #[arg(long)]
+        public_key: Option<String>,
+
+        /// The substitutor the agent should use to fetch the update
+        #[arg(long)]
+        substitutor: Option<String>,
+
+        /// Pet name for the host
         #[arg(index = 1)]
-        host: String,
-        /// Path to flake
-        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
-        path: PathBuf,
+        name: String,
     },
 }

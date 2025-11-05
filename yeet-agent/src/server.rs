@@ -30,11 +30,11 @@ pub async fn status<K: SigningKey + Sync>(url: &Url, key: K) -> anyhow::Result<V
 pub async fn register<K: SigningKey + Sync>(
     url: &Url,
     key: K,
-    register_host: api::RegisterHost,
+    register_host: &api::RegisterHost,
 ) -> anyhow::Result<StatusCode> {
     Client::new()
         .post(url.join("/system/register")?)
-        .json(&register_host)
+        .json(register_host)
         .sign(&sig_param(&key)?, &key)
         .await?
         .send()
@@ -46,11 +46,51 @@ pub async fn register<K: SigningKey + Sync>(
 pub async fn update<K: SigningKey + Sync>(
     url: &Url,
     key: K,
-    host_update_request: api::HostUpdateRequest,
+    host_update_request: &api::HostUpdateRequest,
 ) -> anyhow::Result<StatusCode> {
     Client::new()
         .post(url.join("/system/update")?)
-        .json(&host_update_request)
+        .json(host_update_request)
+        .sign(&sig_param(&key)?, &key)
+        .await?
+        .send()
+        .await?
+        .error_for_code()
+        .await
+}
+
+pub async fn is_host_verified<K: SigningKey + Sync>(url: &Url, key: K) -> anyhow::Result<bool> {
+    Ok(Client::new()
+        .get(url.join("/system/verify")?)
+        .sign(&sig_param(&key)?, &key)
+        .await?
+        .send()
+        .await?
+        .status()
+        .is_success())
+}
+
+pub async fn add_verification_attempt(
+    url: &Url,
+    attempt: &api::VerificationAttempt,
+) -> anyhow::Result<u32> {
+    Client::new()
+        .post(url.join("/system/verify")?)
+        .json(attempt)
+        .send()
+        .await?
+        .error_for_json()
+        .await
+}
+
+pub async fn verify_attempt<K: SigningKey + Sync>(
+    url: &Url,
+    key: K,
+    acceptance: &api::VerificationAcceptance,
+) -> anyhow::Result<StatusCode> {
+    Client::new()
+        .post(url.join("/system/verify/accept")?)
+        .json(acceptance)
         .sign(&sig_param(&key)?, &key)
         .await?
         .send()

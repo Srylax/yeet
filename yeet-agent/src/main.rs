@@ -24,6 +24,7 @@ use yeet_agent::{cachix, display, server};
 use crate::cli::{Commands, Config, Yeet};
 
 mod cli;
+mod server_cli;
 
 #[tokio::main]
 #[expect(clippy::too_many_lines)]
@@ -55,104 +56,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::Status => {
             println!("{}", status_string(&config.url, &config.httpsig_key).await?);
         }
-        Commands::Register {
-            store_path,
-            name,
-            public_key,
-            substitutor,
-        } => {
-            let before = status_string(&config.url, &config.httpsig_key).await?;
-
-            let provision_state = if let Some(store_path) = store_path
-                && let Some(public_key) = public_key
-                && let Some(substitutor) = substitutor
-            {
-                api::ProvisionState::Provisioned(api::Version {
-                    public_key,
-                    store_path,
-                    substitutor,
-                })
-            } else {
-                api::ProvisionState::NotSet
-            };
-
-            server::register(
-                &config.url,
-                get_key(&config.httpsig_key)?,
-                api::RegisterHost {
-                    provision_state,
-                    name,
-                },
-            )
-            .await?;
-            let after = status_string(&config.url, &config.httpsig_key).await?;
-            println!("{}", diff_inline(&before, &after));
-        }
-        Commands::Update {
-            host,
-            store_path,
-            public_key,
-            substitutor,
-        } => {
-            let before = status_string(&config.url, &config.httpsig_key).await?;
-            server::update(
-                &config.url,
-                get_key(&config.httpsig_key)?,
-                api::HostUpdateRequest {
-                    hosts: HashMap::from([(host, store_path)]),
-                    public_key,
-                    substitutor,
-                },
-            )
-            .await;
-            let after = status_string(&config.url, &config.httpsig_key).await?;
-            println!("{}", diff_inline(&before, &after));
-        }
-        Commands::Publish { path, host } => {
-            let before = status_string(&config.url, &config.httpsig_key).await?;
-
-            let hosts = nix::build_hosts(
-                &path.to_string_lossy(),
-                host,
-                std::env::consts::ARCH == "aarch64",
-            )?;
-
-            if hosts.is_empty() {
-                bail!("No hosts found - did you commit your files?")
-            }
-
-            let cache_info = cachix::get_cachix_info(config.cachix.ok_or(anyhow!(
-                "Cachix cache name required. Set it in config or via the --cachix flag"
-            ))?)
-            .await?;
-
-            let public_key = cache_info
-                .public_signing_keys
-                .first()
-                .cloned()
-                .ok_or(anyhow!("Cachix cache has no public signing keys"))?;
-
-            println!("{hosts:?}");
-            cachix::push_paths(hosts.values(), cache_info.name).await?;
-
-            server::update(
-                &config.url,
-                get_key(&config.httpsig_key)?,
-                api::HostUpdateRequest {
-                    hosts,
-                    public_key,
-                    substitutor: cache_info.uri,
-                },
-            )
-            .await?;
-            let after = status_string(&config.url, &config.httpsig_key).await?;
-            println!("{}", diff_inline(&before, &after));
-        }
+        Commands::Server(args) => server_cli::handle_server_commands(args.command, &config).await?,
     }
     Ok(())
 }
 
-async fn status_string(url: &Url, httpsig_key: &Path) -> anyhow::Result<String> {
+pub(crate) async fn status_string(url: &Url, httpsig_key: &Path) -> anyhow::Result<String> {
     let status = server::status(url, get_key(httpsig_key)?).await?;
     let rows = status
         .into_iter()
@@ -162,11 +71,11 @@ async fn status_string(url: &Url, httpsig_key: &Path) -> anyhow::Result<String> 
     Ok(rows.join("\n"))
 }
 
-fn get_key(path: &Path) -> anyhow::Result<SecretKey> {
+pub(crate) fn get_key(path: &Path) -> anyhow::Result<SecretKey> {
     Ok(SecretKey::from_pem(&read_to_string(path)?)?)
 }
 
-fn get_pub_key(path: &Path) -> anyhow::Result<VerifyingKey> {
+pub(crate) fn get_pub_key(path: &Path) -> anyhow::Result<VerifyingKey> {
     Ok(VerifyingKey::from_public_key_pem(&read_to_string(path)?)?)
 }
 

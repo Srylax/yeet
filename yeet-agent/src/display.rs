@@ -1,6 +1,5 @@
 use std::io::Write as _;
 
-use anyhow::ensure;
 use api::hash_hex;
 use console::style;
 use jiff::Zoned;
