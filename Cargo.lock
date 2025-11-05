@@ -315,6 +315,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a18ed336352031311f4e0b4dd2ff392d4fbb370777c9d18d7fc9d7359f73871"
 dependencies = [
  "axum-core 0.5.5",
+ "axum-macros",
  "bytes",
  "form_urlencoded",
  "futures-util",
@@ -379,6 +380,17 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "axum-macros"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "604fde5e028fea851ce1d8570bbdc034bec850d157f7569d10f347d06808c05c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -4168,6 +4180,7 @@ dependencies = [
  "mime",
  "parking_lot",
  "paste",
+ "rand 0.9.2",
  "rand_core 0.6.4",
  "serde",
  "serde_json",

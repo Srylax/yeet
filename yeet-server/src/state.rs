@@ -2,8 +2,13 @@ use api::Host;
 use axum::http::StatusCode;
 use axum_thiserror::ErrorStatus;
 use httpsig_hyper::prelude::{AlgorithmName, SecretKey, SigningKey as _};
+use jiff::{Span, ToSpan, Zoned};
+use rand::{Rng, RngCore as _};
 use serde_json_any_key::any_key_map;
-use std::collections::{HashMap, HashSet, hash_map};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet, hash_map},
+};
 use thiserror::Error;
 
 use ed25519_dalek::VerifyingKey;
@@ -26,6 +31,16 @@ pub enum StateError {
     #[error("The request is authenticated but you lack build credentials")]
     #[status(StatusCode::FORBIDDEN)]
     AuthMissingBuild,
+
+    #[error(
+        "There are too many open verification attempts - limit the visibility of the server to the network"
+    )]
+    #[status(StatusCode::REQUEST_TIMEOUT)]
+    TooManyVerificationAttempts,
+
+    #[error("Key already in an verification attempt")]
+    #[status(StatusCode::BAD_REQUEST)]
+    KeyPendingVerification,
 }
 
 type Result<T> = core::result::Result<T, StateError>;
@@ -42,7 +57,7 @@ pub struct AppState {
     // Maps name to the public key
     key_by_name: HashMap<String, VerifyingKey>,
     // 6 digit number -> unverified pub key
-    // verification_attempt: HashMap<u32, VerifyingKey>,
+    verification_attempt: HashMap<u32, (VerifyingKey, Zoned)>,
 
     // A list of hosts ready for registration
     pre_register_host: HashMap<String, api::ProvisionState>,
@@ -55,6 +70,34 @@ impl AppState {
         state: api::ProvisionState,
     ) -> Option<api::ProvisionState> {
         self.pre_register_host.insert(name, state)
+    }
+
+    #[expect(unused_must_use)]
+    fn drain_verification_attempts(&mut self) {
+        self.verification_attempt.extract_if(|_key, (_kv, time)| {
+            matches!(
+                (&Zoned::now() - &*time).compare(15.minutes()),
+                Ok(Ordering::Greater)
+            )
+        });
+    }
+
+    pub fn add_verification_attempt(&mut self, key: VerifyingKey) -> Result<u32> {
+        self.drain_verification_attempts();
+        if self.verification_attempt.len() >= 10 {
+            return Err(StateError::TooManyVerificationAttempts);
+        }
+
+        if self.verification_attempt.values().any(|(k, _z)| k == &key) {
+            return Err(StateError::KeyPendingVerification);
+        }
+
+        let verification = rand::rng().next_u32();
+
+        self.verification_attempt
+            .insert(verification, (key, Zoned::now()));
+
+        Ok(verification)
     }
 
     /// This is the "ping" command every client should send in a specific interval.

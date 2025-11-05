@@ -4,7 +4,7 @@ use crate::routes::register::register_host;
 // use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 use crate::routes::update::update_hosts;
-use crate::routes::verify::is_host_verified;
+use crate::routes::verify::{add_verification_attempt, is_host_verified};
 use crate::state::AppState;
 // use crate::routes::update::update_hosts;
 use axum::Router;
@@ -85,6 +85,7 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .route("/system/update", post(update_hosts))
         // .route("/system/verify", post(verify_hosts))
         .route("/system/verify", get(is_host_verified))
+        .route("/system/verify", post(add_verification_attempt))
         .route("/status", get(status::status))
         .with_state(state)
 }

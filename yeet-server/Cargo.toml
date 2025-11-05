@@ -14,7 +14,7 @@ workspace = true
 
 
 [dependencies]
-axum = "0.8"
+axum = {version = "0.8", features = ["macros"]}
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.39", features = ["full"] }
@@ -31,6 +31,7 @@ mime = "0.3"
 rand_core = { version = "0.6", features = ["std" ,] }
 thiserror = "2.0.17"
 axum_thiserror = "0.1.0"
+rand = "0.9.2"
 
 
 [dev-dependencies]
