@@ -106,6 +106,11 @@ pub async fn handle_server_commands(
             let after = status_string(&config.url, &config.httpsig_key).await?;
             println!("{}", diff_inline(&before, &after));
         }
+        ServerCommands::VerifyStatus => {
+            let status =
+                server::is_host_verified(&config.url, get_key(&config.httpsig_key)?).await?;
+            println!("{status}");
+        }
     }
     Ok(())
 }

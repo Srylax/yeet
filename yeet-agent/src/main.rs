@@ -1,6 +1,5 @@
 //! # Yeet Agent
 
-use std::collections::HashMap;
 use std::fs::{File, read_link, read_to_string};
 use std::io::{BufRead as _, BufReader};
 use std::path::Path;
@@ -17,7 +16,6 @@ use httpsig_hyper::prelude::SecretKey;
 use log::info;
 use notify_rust::Notification;
 use url::Url;
-use yeet_agent::display::diff_inline;
 use yeet_agent::nix::{self, run_vm};
 use yeet_agent::{cachix, display, server};
 

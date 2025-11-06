@@ -1,9 +1,9 @@
 use api::Host;
 use axum::http::StatusCode;
 use axum_thiserror::ErrorStatus;
-use httpsig_hyper::prelude::{AlgorithmName, SecretKey, SigningKey as _};
-use jiff::{Span, ToSpan, Zoned};
-use rand::{Rng, RngCore as _};
+use httpsig_hyper::prelude::{AlgorithmName, PublicKey, VerifyingKey as _};
+use jiff::{ToSpan as _, Zoned};
+use rand::RngCore as _;
 use serde_json_any_key::any_key_map;
 use std::{
     cmp::Ordering,
@@ -122,7 +122,7 @@ impl AppState {
             return Err(StateError::PreRegisterNotFound(acceptance.host_name));
         };
 
-        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, attempt.key.as_bytes())
+        let signing_key = PublicKey::from_bytes(AlgorithmName::Ed25519, attempt.key.as_bytes())
             .expect("Verifying key already is validated");
 
         self.key_by_name
@@ -259,7 +259,7 @@ impl AppState {
 
     // lol maybe add something for that
     pub fn add_build(&mut self, key: VerifyingKey) {
-        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
+        let signing_key = PublicKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
             .expect("Verifying key already is validated");
         self.build_machines_credentials.insert(key);
         self.keyids.insert(signing_key.key_id(), key);
@@ -278,7 +278,7 @@ impl AppState {
     }
 
     pub fn add_admin_key(&mut self, key: VerifyingKey) {
-        let signing_key = SecretKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
+        let signing_key = PublicKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
             .expect("Could not convert ED25519 key to httpsig key - wtf");
         self.admin_credentials.insert(key);
         self.keyids.insert(signing_key.key_id(), key);

@@ -1,26 +1,19 @@
 //! Yeet that Config
 
 use crate::routes::register::register_host;
-// use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 use crate::routes::update::update_hosts;
 use crate::routes::verify::{add_verification_attempt, is_host_verified, verify_attempt};
 use crate::state::AppState;
-// use crate::routes::update::update_hosts;
 use axum::Router;
 use axum::routing::{get, post};
-use ed25519_dalek::pkcs8::EncodePrivateKey;
+use ed25519_dalek::SigningKey;
+use ed25519_dalek::pkcs8::EncodePrivateKey as _;
 use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
-use ed25519_dalek::{SigningKey, VerifyingKey};
-use httpsig_hyper::prelude::SigningKey as _;
-use jiff::Zoned;
 use parking_lot::RwLock;
 use routes::status;
-use serde::{Deserialize, Serialize};
-use serde_json_any_key::any_key_map;
-use std::collections::{HashMap, HashSet};
 use std::fs::{File, OpenOptions, rename};
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use std::os::unix::prelude::FileExt as _;
 use std::sync::Arc;
 use std::time::Duration;
@@ -61,7 +54,7 @@ async fn main() {
         key.write_pkcs8_pem_file("yeet-admin.pem", LineEnding::LF)
             .expect("Could not write the admin credential file");
         println!("Written to file `yeet-admin.pem`");
-        state.add_admin_key(key.verifying_key())
+        state.add_admin_key(key.verifying_key());
     }
 
     let state = Arc::new(RwLock::new(state));

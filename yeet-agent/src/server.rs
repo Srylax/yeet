@@ -59,15 +59,18 @@ pub async fn update<K: SigningKey + Sync>(
         .await
 }
 
-pub async fn is_host_verified<K: SigningKey + Sync>(url: &Url, key: K) -> anyhow::Result<bool> {
-    Ok(Client::new()
+pub async fn is_host_verified<K: SigningKey + Sync>(
+    url: &Url,
+    key: K,
+) -> anyhow::Result<StatusCode> {
+    Client::new()
         .get(url.join("/system/verify")?)
         .sign(&sig_param(&key)?, &key)
         .await?
         .send()
         .await?
-        .status()
-        .is_success())
+        .error_for_code()
+        .await
 }
 
 pub async fn add_verification_attempt(

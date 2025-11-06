@@ -127,4 +127,6 @@ pub enum ServerCommands {
         #[arg(index = 1)]
         name: String,
     },
+    /// Check if a key is verified
+    VerifyStatus,
 }
