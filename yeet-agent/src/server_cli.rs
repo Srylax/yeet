@@ -24,7 +24,7 @@ pub async fn handle_server_commands(
                 && let Some(public_key) = public_key
                 && let Some(substitutor) = substitutor
             {
-                api::ProvisionState::Provisioned(api::Version {
+                api::ProvisionState::Provisioned(api::RemoteStorePath {
                     public_key,
                     store_path,
                     substitutor,

@@ -34,7 +34,7 @@ pub struct HostUpdateRequest {
     clippy::exhaustive_structs,
     reason = "API Structs should be breaking change"
 )]
-pub struct Version {
+pub struct RemoteStorePath {
     /// The public key the cache uses to sign the store path
     pub public_key: String,
     /// The store path to fetch from the nix cache
@@ -133,7 +133,7 @@ impl Host {
         self.version_history.push((store_path, Zoned::now()));
     }
 
-    pub fn push_update(&mut self, version: Version) {
+    pub fn push_update(&mut self, version: RemoteStorePath) {
         if self.is_provisioned() || self.is_notset() {
             self.provision_state = ProvisionState::Provisioned(version);
         }
@@ -181,7 +181,7 @@ impl Host {
 pub enum ProvisionState {
     NotSet,
     Detached,
-    Provisioned(Version),
+    Provisioned(RemoteStorePath),
 }
 
 impl Default for ProvisionState {
@@ -197,7 +197,7 @@ impl Default for ProvisionState {
 pub enum AgentAction {
     Nothing,
     Detach,
-    SwitchTo(Version),
+    SwitchTo(RemoteStorePath),
 }
 
 impl Default for AgentAction {

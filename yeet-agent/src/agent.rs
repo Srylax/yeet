@@ -122,7 +122,7 @@ fn trusted_public_keys() -> anyhow::Result<Vec<String>> {
         .collect())
 }
 
-fn update(version: &api::Version) -> anyhow::Result<()> {
+fn update(version: &api::RemoteStorePath) -> anyhow::Result<()> {
     download(version)?;
     activate(version)?;
     Notification::new()
@@ -133,7 +133,7 @@ fn update(version: &api::Version) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn download(version: &api::Version) -> anyhow::Result<()> {
+fn download(version: &api::RemoteStorePath) -> anyhow::Result<()> {
     info!("Downloading {}", version.store_path);
     let mut keys = trusted_public_keys()?;
     keys.push(version.public_key.clone());
@@ -158,7 +158,7 @@ fn download(version: &api::Version) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn set_system_profile(version: &api::Version) -> anyhow::Result<()> {
+fn set_system_profile(version: &api::RemoteStorePath) -> anyhow::Result<()> {
     info!("Setting system profile to {}", version.store_path);
     let profile = Command::new("nix-env")
         .args([
@@ -175,7 +175,7 @@ fn set_system_profile(version: &api::Version) -> anyhow::Result<()> {
 }
 
 #[cfg(target_os = "macos")]
-fn activate(version: &api::Version) -> anyhow::Result<()> {
+fn activate(version: &api::RemoteStorePath) -> anyhow::Result<()> {
     set_system_profile(version)?;
     info!("Activating {}", version.store_path);
     Command::new(Path::new(&version.store_path).join("activate")).spawn()?;
@@ -183,7 +183,7 @@ fn activate(version: &api::Version) -> anyhow::Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn activate(version: &api::Version) -> Result<()> {
+fn activate(version: &api::RemoteStorePath) -> Result<()> {
     info!("Activating {}", version.store_path);
     set_system_profile(version)?;
     Command::new(Path::new(&version.store_path).join("bin/switch-to-configuration"))

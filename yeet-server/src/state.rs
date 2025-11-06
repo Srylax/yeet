@@ -236,7 +236,7 @@ impl AppState {
         for (host, store_path) in unknown_hosts {
             self.pre_register_host(
                 host.clone(),
-                api::ProvisionState::Provisioned(api::Version {
+                api::ProvisionState::Provisioned(api::RemoteStorePath {
                     store_path: store_path.clone(),
                     substitutor: substitutor.clone(),
                     public_key: public_key.clone(),
@@ -248,7 +248,7 @@ impl AppState {
             let host = self
                 .host_by_name_mut(&name)
                 .expect("Race condition because we checked above - maybe change this TOCTOU");
-            let version = api::Version {
+            let version = api::RemoteStorePath {
                 store_path: store_path.clone(),
                 substitutor: substitutor.clone(),
                 public_key: public_key.clone(),
