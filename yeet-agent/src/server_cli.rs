@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use log::info;
 use yeet_agent::{display::diff_inline, server};
 
 use crate::{
@@ -43,7 +44,7 @@ pub async fn handle_server_commands(
             )
             .await?;
             let after = status_string(&config.url, &config.httpsig_key).await?;
-            println!("{}", diff_inline(&before, &after));
+            info!("{}", diff_inline(&before, &after));
         }
         ServerCommands::Update {
             host,
@@ -63,13 +64,13 @@ pub async fn handle_server_commands(
             )
             .await?;
             let after = status_string(&config.url, &config.httpsig_key).await?;
-            println!("{}", diff_inline(&before, &after));
+            info!("{}", diff_inline(&before, &after));
         }
 
         ServerCommands::VerifyStatus => {
             let status =
                 server::is_host_verified(&config.url, &get_sig_key(&config.httpsig_key)?).await?;
-            println!("{status}");
+            info!("{status}");
         }
         ServerCommands::AddVerification {
             store_path,
@@ -83,7 +84,7 @@ pub async fn handle_server_commands(
                 },
             )
             .await?;
-            println!("{code}");
+            info!("{code}");
         }
         ServerCommands::VerifyAttempt { name, code } => {
             let status = server::verify_attempt(
@@ -95,7 +96,7 @@ pub async fn handle_server_commands(
                 },
             )
             .await?;
-            println!("{status}");
+            info!("{status}");
         }
     }
     Ok(())

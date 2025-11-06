@@ -12,11 +12,11 @@ use std::{
     fs::{File, read_link},
     process::Command,
 };
-use tokio::time::sleep;
+use tokio::time;
 use yeet_agent::server;
 
 use anyhow::bail;
-use log::{error, info, warn};
+use log::{error, info};
 use notify_rust::Notification;
 use ssh_key::PrivateKey;
 
@@ -30,7 +30,7 @@ static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 ///         create a new verification request
 ///         pull the verify endpoint in a time intervall
 /// 2. Continuosly pull the system endpoint and execute based on the provided
-pub async fn agent(config: &Config) -> anyhow::Result<()> {
+pub async fn agent(config: &Config, sleep: u64) -> anyhow::Result<()> {
     let secret_key = read_to_string(&config.httpsig_key)?;
     let (pub_key, key) = if secret_key.contains("BEGIN OPENSSH PRIVATE KEY") {
         let key = PrivateKey::from_openssh(secret_key)?;
@@ -49,11 +49,11 @@ pub async fn agent(config: &Config) -> anyhow::Result<()> {
         (pub_key, key)
     };
 
-    (|| async { agent_loop(config, &key, pub_key).await })
+    (|| async { agent_loop(config, &key, pub_key, sleep).await })
         .retry(
             ConstantBuilder::new()
                 .without_max_times()
-                .with_delay(Duration::from_secs(3)),
+                .with_delay(Duration::from_secs(sleep)),
         )
         .notify(|err: &anyhow::Error, dur: Duration| {
             error!("{err:?} - retrying in {dur:?}");
@@ -63,7 +63,12 @@ pub async fn agent(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn agent_loop(config: &Config, key: &SecretKey, pub_key: VerifyingKey) -> anyhow::Result<()> {
+async fn agent_loop(
+    config: &Config,
+    key: &SecretKey,
+    pub_key: VerifyingKey,
+    sleep: u64,
+) -> anyhow::Result<()> {
     let verified = server::is_host_verified(&config.url, key)
         .await?
         .is_success();
@@ -97,8 +102,19 @@ async fn agent_loop(config: &Config, key: &SecretKey, pub_key: VerifyingKey) -> 
         .await?;
 
         info!("{action:#?}");
-        sleep(Duration::from_secs(3)).await;
+
+        agent_action(action)?;
+        time::sleep(Duration::from_secs(sleep)).await;
     }
+}
+
+fn agent_action(action: api::AgentAction) -> anyhow::Result<()> {
+    match action {
+        api::AgentAction::Nothing => {}
+        api::AgentAction::Detach => {}
+        api::AgentAction::SwitchTo(remote_store_path) => update(&remote_store_path)?,
+    }
+    Ok(())
 }
 
 fn get_active_version() -> anyhow::Result<String> {
@@ -178,7 +194,9 @@ fn set_system_profile(version: &api::RemoteStorePath) -> anyhow::Result<()> {
 fn activate(version: &api::RemoteStorePath) -> anyhow::Result<()> {
     set_system_profile(version)?;
     info!("Activating {}", version.store_path);
-    Command::new(Path::new(&version.store_path).join("activate")).spawn()?;
+    Command::new(Path::new(&version.store_path).join("activate"))
+        .spawn()?
+        .wait()?;
     Ok(())
 }
 
@@ -188,6 +206,7 @@ fn activate(version: &api::RemoteStorePath) -> Result<()> {
     set_system_profile(version)?;
     Command::new(Path::new(&version.store_path).join("bin/switch-to-configuration"))
         .arg("switch")
-        .spawn()?;
+        .spawn()?
+        .wait()?;
     Ok(())
 }

@@ -11,6 +11,7 @@ use ed25519_dalek::pkcs8::DecodePublicKey as _;
 use figment::Figment;
 use figment::providers::{Env, Format as _, Serialized, Toml};
 use httpsig_hyper::prelude::SecretKey;
+use log::info;
 use url::Url;
 use yeet_agent::display::diff_inline;
 use yeet_agent::nix::{self, run_vm};
@@ -39,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
         .extract()?;
     match args.command {
         Commands::Build { path, host } => {
-            println!(
+            info!(
                 "{:?}",
                 nix::build_hosts(
                     &path.to_string_lossy(),
@@ -50,14 +51,12 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::VM { host, path } => run_vm(&path, &host)?,
         Commands::Agent { sleep } => {
-            agent::agent(&config).await?;
+            agent::agent(&config, sleep).await?;
         }
         Commands::Status => {
-            println!("{}", status_string(&config.url, &config.httpsig_key).await?);
+            info!("{}", status_string(&config.url, &config.httpsig_key).await?);
         }
         Commands::Publish { path, host } => {
-            let before = status_string(&config.url, &config.httpsig_key).await?;
-
             let hosts = nix::build_hosts(
                 &path.to_string_lossy(),
                 host,
@@ -79,9 +78,10 @@ async fn main() -> anyhow::Result<()> {
                 .cloned()
                 .ok_or(anyhow!("Cachix cache has no public signing keys"))?;
 
-            println!("{hosts:?}");
+            info!("{hosts:?}");
             cachix::push_paths(hosts.values(), cache_info.name).await?;
 
+            let before = status_string(&config.url, &config.httpsig_key).await?;
             server::update(
                 &config.url,
                 &get_sig_key(&config.httpsig_key)?,
@@ -93,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
             )
             .await?;
             let after = status_string(&config.url, &config.httpsig_key).await?;
-            println!("{}", diff_inline(&before, &after));
+            info!("{}", diff_inline(&before, &after));
         }
         Commands::Server(args) => server_cli::handle_server_commands(args.command, &config).await?,
     }
