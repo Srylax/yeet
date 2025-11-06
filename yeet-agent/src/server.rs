@@ -16,10 +16,10 @@ static COMPONENTS: LazyLock<Vec<message_component::HttpMessageComponentId>> = La
         .expect("Could not create HTTP Signature components")
 });
 
-pub async fn status<K: SigningKey + Sync>(url: &Url, key: K) -> anyhow::Result<Vec<api::Host>> {
+pub async fn status<K: SigningKey + Sync>(url: &Url, key: &K) -> anyhow::Result<Vec<api::Host>> {
     Client::new()
         .get(url.join("/status")?)
-        .sign(&sig_param(&key)?, &key)
+        .sign(&sig_param(key)?, key)
         .await?
         .send()
         .await?
@@ -29,13 +29,13 @@ pub async fn status<K: SigningKey + Sync>(url: &Url, key: K) -> anyhow::Result<V
 
 pub async fn register<K: SigningKey + Sync>(
     url: &Url,
-    key: K,
+    key: &K,
     register_host: &api::RegisterHost,
 ) -> anyhow::Result<StatusCode> {
     Client::new()
         .post(url.join("/system/register")?)
         .json(register_host)
-        .sign(&sig_param(&key)?, &key)
+        .sign(&sig_param(key)?, key)
         .await?
         .send()
         .await?
@@ -45,13 +45,13 @@ pub async fn register<K: SigningKey + Sync>(
 
 pub async fn update<K: SigningKey + Sync>(
     url: &Url,
-    key: K,
+    key: &K,
     host_update_request: &api::HostUpdateRequest,
 ) -> anyhow::Result<StatusCode> {
     Client::new()
         .post(url.join("/system/update")?)
         .json(host_update_request)
-        .sign(&sig_param(&key)?, &key)
+        .sign(&sig_param(key)?, key)
         .await?
         .send()
         .await?
@@ -61,16 +61,15 @@ pub async fn update<K: SigningKey + Sync>(
 
 pub async fn is_host_verified<K: SigningKey + Sync>(
     url: &Url,
-    key: K,
+    key: &K,
 ) -> anyhow::Result<StatusCode> {
-    Client::new()
+    Ok(Client::new()
         .get(url.join("/system/verify")?)
-        .sign(&sig_param(&key)?, &key)
+        .sign(&sig_param(key)?, key)
         .await?
         .send()
         .await?
-        .error_for_code()
-        .await
+        .status())
 }
 
 pub async fn add_verification_attempt(
@@ -88,17 +87,33 @@ pub async fn add_verification_attempt(
 
 pub async fn verify_attempt<K: SigningKey + Sync>(
     url: &Url,
-    key: K,
+    key: &K,
     acceptance: &api::VerificationAcceptance,
 ) -> anyhow::Result<StatusCode> {
     Client::new()
         .post(url.join("/system/verify/accept")?)
         .json(acceptance)
-        .sign(&sig_param(&key)?, &key)
+        .sign(&sig_param(key)?, key)
         .await?
         .send()
         .await?
         .error_for_code()
+        .await
+}
+
+pub async fn system_check<K: SigningKey + Sync>(
+    url: &Url,
+    key: &K,
+    version: &api::VersionRequest,
+) -> anyhow::Result<api::AgentAction> {
+    Client::new()
+        .post(url.join("/system/check")?)
+        .json(version)
+        .sign(&sig_param(key)?, key)
+        .await?
+        .send()
+        .await?
+        .error_for_json()
         .await
 }
 

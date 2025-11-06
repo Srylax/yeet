@@ -1,47 +1,103 @@
+use anyhow::{Ok, anyhow};
+use backon::{ConstantBuilder, Retryable as _};
+use ed25519_dalek::pkcs8::DecodePrivateKey;
+use ed25519_dalek::{SigningKey, VerifyingKey};
+use httpsig_hyper::prelude::{AlgorithmName, SecretKey};
+use std::fs::read_to_string;
 use std::io::{BufRead as _, BufReader};
 use std::path::Path;
+use std::sync::OnceLock;
+use std::time::Duration;
 use std::{
     fs::{File, read_link},
     process::Command,
 };
+use tokio::time::sleep;
+use yeet_agent::server;
 
 use anyhow::bail;
-use log::info;
+use log::{error, info, warn};
 use notify_rust::Notification;
+use ssh_key::PrivateKey;
 
-#[cfg(false)]
-fn main_loop() -> Result<()> {
-    let args = Yeet::try_parse()?;
-    let check_url = args.url.join("system/check")?;
-    let key = PrivateKey::read_openssh_file(Path::new("/etc/ssh/ssh_host_ed25519_key"))?;
+use crate::cli::Config;
 
-    let mut key = SigningKey::from_bytes(
-        &key.key_data()
+static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
+
+/// When running the agent should do these things in order:
+/// 1. Check if agent is active aka if the key is enrolled with `/system/verify`
+///     if not:
+///         create a new verification request
+///         pull the verify endpoint in a time intervall
+/// 2. Continuosly pull the system endpoint and execute based on the provided
+pub async fn agent(config: &Config) -> anyhow::Result<()> {
+    let secret_key = read_to_string(&config.httpsig_key)?;
+    let (pub_key, key) = if secret_key.contains("BEGIN OPENSSH PRIVATE KEY") {
+        let key = PrivateKey::from_openssh(secret_key)?;
+        let bytes = key
+            .key_data()
             .ed25519()
             .ok_or(anyhow!("Key is not of type ED25519"))?
             .private
-            .to_bytes(),
-    );
+            .to_bytes();
+        let pub_key = SigningKey::from_bytes(&bytes).verifying_key();
+        let key = SecretKey::from_bytes(AlgorithmName::Ed25519, &bytes)?;
+        (pub_key, key)
+    } else {
+        let pub_key = SigningKey::from_pkcs8_pem(secret_key.as_str())?.verifying_key();
+        let key = SecretKey::from_pem(secret_key.as_str())?;
+        (pub_key, key)
+    };
+
+    (|| async { agent_loop(config, &key, pub_key).await })
+        .retry(
+            ConstantBuilder::new()
+                .without_max_times()
+                .with_delay(Duration::from_secs(3)),
+        )
+        .notify(|err: &anyhow::Error, dur: Duration| {
+            error!("{err:?} - retrying in {dur:?}");
+        })
+        .await?;
+
+    Ok(())
+}
+
+async fn agent_loop(config: &Config, key: &SecretKey, pub_key: VerifyingKey) -> anyhow::Result<()> {
+    let verified = server::is_host_verified(&config.url, key)
+        .await?
+        .is_success();
+
+    if !verified {
+        if let Some(code) = VERIFICATION_CODE.get() {
+            bail!("Verification requested but not yet approved. Code: {code}");
+        }
+        let code = server::add_verification_attempt(
+            &config.url,
+            &api::VerificationAttempt {
+                key: pub_key,
+                store_path: get_active_version()?,
+            },
+        )
+        .await?;
+        VERIFICATION_CODE.set(code);
+        info!("Your verification code is: {code}");
+        bail!("Waiting for verification");
+    }
+    info!("Verified!");
 
     loop {
-        let store_path = get_active_version()?;
-        let check = Client::new()
-            .post(check_url.as_str())
-            .json(&VersionRequest { store_path })
-            .send()?;
-        if !check.status().is_success() {
-            bail!("Server Error ({}): {}", check.status(), check.text()?);
-        }
-        match check.json::<VersionStatus>()? {
-            VersionStatus::UpToDate => {
-                info!("UpToDate");
-            }
-            VersionStatus::NewVersionAvailable(version) => {
-                info!("NewVersionAvailable");
-                update(&version)?;
-            }
-        }
-        sleep(Duration::from_secs(args.sleep));
+        let action = server::system_check(
+            &config.url,
+            key,
+            &api::VersionRequest {
+                store_path: get_active_version()?,
+            },
+        )
+        .await?;
+
+        info!("{action:#?}");
+        sleep(Duration::from_secs(3)).await;
     }
 }
 

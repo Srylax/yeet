@@ -5,7 +5,7 @@ use yeet_agent::{cachix, display::diff_inline, nix, server};
 
 use crate::{
     cli::{Config, ServerCommands},
-    get_key, get_pub_key, status_string,
+    get_sig_key, get_verify_key, status_string,
 };
 
 pub async fn handle_server_commands(
@@ -36,7 +36,7 @@ pub async fn handle_server_commands(
 
             server::register(
                 &config.url,
-                get_key(&config.httpsig_key)?,
+                &get_sig_key(&config.httpsig_key)?,
                 &api::RegisterHost {
                     provision_state,
                     name,
@@ -55,14 +55,14 @@ pub async fn handle_server_commands(
             let before = status_string(&config.url, &config.httpsig_key).await?;
             server::update(
                 &config.url,
-                get_key(&config.httpsig_key)?,
+                &get_sig_key(&config.httpsig_key)?,
                 &api::HostUpdateRequest {
                     hosts: HashMap::from([(host, store_path)]),
                     public_key,
                     substitutor,
                 },
             )
-            .await;
+            .await?;
             let after = status_string(&config.url, &config.httpsig_key).await?;
             println!("{}", diff_inline(&before, &after));
         }
@@ -95,7 +95,7 @@ pub async fn handle_server_commands(
 
             server::update(
                 &config.url,
-                get_key(&config.httpsig_key)?,
+                &get_sig_key(&config.httpsig_key)?,
                 &api::HostUpdateRequest {
                     hosts,
                     public_key,
@@ -108,7 +108,7 @@ pub async fn handle_server_commands(
         }
         ServerCommands::VerifyStatus => {
             let status =
-                server::is_host_verified(&config.url, get_key(&config.httpsig_key)?).await?;
+                server::is_host_verified(&config.url, &get_sig_key(&config.httpsig_key)?).await?;
             println!("{status}");
         }
         ServerCommands::AddVerification {
@@ -119,7 +119,7 @@ pub async fn handle_server_commands(
                 &config.url,
                 &api::VerificationAttempt {
                     store_path,
-                    key: get_pub_key(&public_key)?,
+                    key: get_verify_key(&public_key)?,
                 },
             )
             .await?;
@@ -128,7 +128,7 @@ pub async fn handle_server_commands(
         ServerCommands::VerifyAttempt { name, code } => {
             let status = server::verify_attempt(
                 &config.url,
-                get_key(&config.httpsig_key)?,
+                &get_sig_key(&config.httpsig_key)?,
                 &api::VerificationAcceptance {
                     code,
                     host_name: name,

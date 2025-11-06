@@ -32,6 +32,7 @@ xdg = "3.0.0"
 jiff = {version = "0.2", features = []}
 similar = { version = "2.7.0", features = ["unicode"] }
 console = "0.16.1"
+backon = "1.6.0"
 
 
 [lints]

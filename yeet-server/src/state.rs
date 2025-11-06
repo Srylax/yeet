@@ -196,7 +196,7 @@ impl AppState {
     ) -> Result<api::AgentAction> {
         let host = self.hosts.get_mut(key).ok_or(StateError::HostNotFound)?;
 
-        let action = match host.provision_state {
+        let action = match host.provision_state.clone() {
             api::ProvisionState::NotSet => api::AgentAction::Nothing,
             api::ProvisionState::Detached => {
                 if host.latest_store_path() != &store_path {
@@ -204,17 +204,15 @@ impl AppState {
                 }
                 api::AgentAction::Detach
             }
-            api::ProvisionState::Provisioned(ref version) => {
-                if store_path != version.store_path {
-                    // TODO: we do not see if we updated fast in succession we only se the latest
-                    api::AgentAction::SwitchTo(version.clone())
-                } else if (version.store_path == store_path)
-                    && &store_path != host.latest_store_path()
-                {
-                    host.update_store_path(store_path);
+            api::ProvisionState::Provisioned(version) => {
+                if &store_path != host.latest_store_path() {
+                    host.update_store_path(store_path.clone());
+                }
+                if store_path == version.store_path {
                     api::AgentAction::Nothing
                 } else {
-                    api::AgentAction::Nothing
+                    // TODO: we do not see if we updated fast in succession we only see the latest
+                    api::AgentAction::SwitchTo(version.clone())
                 }
             }
         };

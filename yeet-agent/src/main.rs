@@ -24,13 +24,14 @@ mod server_cli;
 #[expect(clippy::too_many_lines)]
 #[expect(clippy::unwrap_in_result)]
 async fn main() -> anyhow::Result<()> {
+    env_logger::init();
     let xdg_dirs = xdg::BaseDirectories::with_prefix("yeet");
     let args = Yeet::try_parse()?;
     let config: Config = Figment::new()
-        .merge(Serialized::defaults(args.config))
         .merge(Toml::file(
             xdg_dirs.find_config_file("agent.toml").unwrap_or_default(),
         ))
+        .merge(Serialized::defaults(args.config))
         .merge(Toml::file(".config/yeet.toml"))
         .merge(Env::prefixed("YEET_"))
         .extract()?;
@@ -46,7 +47,9 @@ async fn main() -> anyhow::Result<()> {
             );
         }
         Commands::VM { host, path } => run_vm(&path, &host)?,
-        Commands::Agent { sleep } => todo!(),
+        Commands::Agent { sleep } => {
+            agent::agent(&config).await?;
+        }
         Commands::Status => {
             println!("{}", status_string(&config.url, &config.httpsig_key).await?);
         }
@@ -56,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 pub(crate) async fn status_string(url: &Url, httpsig_key: &Path) -> anyhow::Result<String> {
-    let status = server::status(url, get_key(httpsig_key)?).await?;
+    let status = server::status(url, &get_sig_key(httpsig_key)?).await?;
     let rows = status
         .into_iter()
         .map(|host| display::host(&host))
@@ -65,10 +68,10 @@ pub(crate) async fn status_string(url: &Url, httpsig_key: &Path) -> anyhow::Resu
     Ok(rows.join("\n"))
 }
 
-pub(crate) fn get_key(path: &Path) -> anyhow::Result<SecretKey> {
+pub(crate) fn get_sig_key(path: &Path) -> anyhow::Result<SecretKey> {
     Ok(SecretKey::from_pem(&read_to_string(path)?)?)
 }
 
-pub(crate) fn get_pub_key(path: &Path) -> anyhow::Result<VerifyingKey> {
+pub(crate) fn get_verify_key(path: &Path) -> anyhow::Result<VerifyingKey> {
     Ok(VerifyingKey::from_public_key_pem(&read_to_string(path)?)?)
 }

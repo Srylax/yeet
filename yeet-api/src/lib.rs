@@ -134,7 +134,7 @@ impl Host {
     }
 
     pub fn push_update(&mut self, version: Version) {
-        if self.is_provisioned() {
+        if self.is_provisioned() || self.is_notset() {
             self.provision_state = ProvisionState::Provisioned(version);
         }
     }
@@ -163,6 +163,14 @@ impl Host {
         match self.provision_state {
             ProvisionState::Provisioned(_) => true,
             ProvisionState::NotSet | ProvisionState::Detached => false,
+        }
+    }
+
+    #[must_use]
+    pub fn is_notset(&self) -> bool {
+        match self.provision_state {
+            ProvisionState::Provisioned(_) | ProvisionState::Detached => false,
+            ProvisionState::NotSet => true,
         }
     }
 }
