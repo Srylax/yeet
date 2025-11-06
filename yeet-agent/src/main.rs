@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::Command;
 use std::str;
 
-use anyhow::{Ok, Result, anyhow, bail};
+use anyhow::{Ok, Result, bail};
 use clap::Parser as _;
 use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::pkcs8::DecodePublicKey as _;
@@ -17,7 +17,7 @@ use log::info;
 use notify_rust::Notification;
 use url::Url;
 use yeet_agent::nix::{self, run_vm};
-use yeet_agent::{cachix, display, server};
+use yeet_agent::{display, server};
 
 use crate::cli::{Commands, Config, Yeet};
 

@@ -1,10 +1,9 @@
 //! API for yeet
 
 use jiff::Zoned;
-use serde_json_any_key::any_key_map;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use ed25519_dalek::{Signature, VerifyingKey};
+use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
 pub mod httpsig;
@@ -122,6 +121,7 @@ pub struct Host {
 }
 
 impl Host {
+    #[must_use]
     pub fn latest_store_path(&self) -> &StorePath {
         &self
             .version_history
@@ -150,6 +150,7 @@ impl Host {
     //     }
     // }
 
+    #[must_use]
     pub fn is_detached(&self) -> bool {
         match self.provision_state {
             ProvisionState::NotSet | ProvisionState::Provisioned(_) => false,
@@ -157,6 +158,7 @@ impl Host {
         }
     }
 
+    #[must_use]
     pub fn is_provisioned(&self) -> bool {
         match self.provision_state {
             ProvisionState::Provisioned(_) => true,

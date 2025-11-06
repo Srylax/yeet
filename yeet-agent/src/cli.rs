@@ -91,7 +91,7 @@ pub enum ServerCommands {
         #[arg(long)]
         host: Vec<String>,
     },
-    /// Update a host e.g. push a new store_path TODO: batch update
+    /// Update a host e.g. push a new `store_path` TODO: batch update
     Update {
         /// Name of the host
         #[arg(long)]

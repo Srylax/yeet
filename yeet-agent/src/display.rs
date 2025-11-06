@@ -26,8 +26,8 @@ pub fn host(host: &api::Host) -> anyhow::Result<String> {
 
     writeln!(
         &mut w,
-        " • Version: {}",
-        hash_hex(&host.latest_store_path())
+        " \u{2022} Version: {}",
+        hash_hex(host.latest_store_path())
     )?;
 
     // TODO: write this new maybe some login on the host itself like host.is_latest()
@@ -41,7 +41,7 @@ pub fn host(host: &api::Host) -> anyhow::Result<String> {
 
     writeln!(
         &mut w,
-        " • Last Seen: {}",
+        " \u{2022} Last Seen: {}",
         format!("{:#}", &Zoned::now() - &host.last_ping)
     )?;
 
@@ -59,7 +59,7 @@ pub fn diff_inline<T: similar::DiffableStrRef + ?Sized>(old: &T, new: &T) -> Str
                 let mut replace_output = String::new();
                 let diffs = diff.iter_changes(op).collect::<Vec<_>>();
                 for index in 0..diffs.len() {
-                    let change = diffs.get(index).unwrap();
+                    let change = &diffs[index];
                     // we need the change from insert -> deleted so that we can input the arrow
                     // This is because each word is a change and not only the before / after
                     let next = diffs.get(index + 1).unwrap_or(change);

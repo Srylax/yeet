@@ -2,16 +2,12 @@ use std::sync::Arc;
 
 use axum::{
     Json,
-    body::Body,
-    extract::{
-        FromRequest, FromRequestParts, Request,
-        rejection::{JsonRejection, MissingJsonContentType},
-    },
+    extract::{FromRequest, FromRequestParts, Request},
     http::{self, HeaderMap, StatusCode, header},
 };
 use ed25519_dalek::VerifyingKey;
 use httpsig_hyper::{
-    ContentDigest, MessageSignature as _, MessageSignatureReq as _, RequestContentDigest,
+    ContentDigest as _, MessageSignature as _, MessageSignatureReq as _, RequestContentDigest as _,
     prelude::{AlgorithmName, PublicKey},
 };
 use parking_lot::RwLock;
