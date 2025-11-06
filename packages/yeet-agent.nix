@@ -14,14 +14,9 @@ pkgs.rustPlatform.buildRustPackage {
   buildInputs = [
     pkgs.openssl
   ]
-  ++ pkgs.lib.optionals pkgs.stdenv.isDarwin (
-    with pkgs.darwin.apple_sdk.frameworks;
-    [
-      SystemConfiguration
-      CoreServices
-      Cocoa
-    ]
-  )
+  ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+    pkgs.apple-sdk
+  ]
   ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
     pkgs.dbus
   ];
