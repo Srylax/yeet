@@ -7,3 +7,4 @@ dist
 book/book
 *.pem
 *.pub
+templates/default/flake.lock
