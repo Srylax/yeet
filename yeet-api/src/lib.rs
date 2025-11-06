@@ -184,6 +184,15 @@ pub enum ProvisionState {
     Provisioned(RemoteStorePath),
 }
 
+impl ProvisionState {
+    pub fn store_path(&self) -> Option<&StorePath> {
+        match self {
+            ProvisionState::Provisioned(remote_store_path) => Some(&remote_store_path.store_path),
+            _ => None,
+        }
+    }
+}
+
 impl Default for ProvisionState {
     #[inline]
     fn default() -> Self {

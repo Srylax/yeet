@@ -22,7 +22,7 @@ pub fn host(host: &api::Host) -> anyhow::Result<String> {
     };
 
     let mut w = Vec::new();
-    writeln!(&mut w, " {}{status}", host.name)?;
+    writeln!(&mut w, "{}{status}", host.name)?;
 
     writeln!(
         &mut w,
@@ -30,14 +30,11 @@ pub fn host(host: &api::Host) -> anyhow::Result<String> {
         hash_hex(host.latest_store_path())
     )?;
 
-    // TODO: write this new maybe some login on the host itself like host.is_latest()
-    // if let api::ProvisionState::NewVersionAvailable(ref next_version) = host.provision_state {
-    //     writeln!(
-    //         &mut w,
-    //         " • Next Version: {}",
-    //         hash_hex(&next_version.store_path)
-    //     )?;
-    // }
+    if let Some(next) = host.provision_state.store_path()
+        && next != host.latest_store_path()
+    {
+        writeln!(&mut w, " • Next Version: {}", hash_hex(next))?;
+    }
 
     writeln!(
         &mut w,
