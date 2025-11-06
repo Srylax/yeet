@@ -2,7 +2,7 @@ use std::io::Write as _;
 
 use api::hash_hex;
 use console::style;
-use jiff::Zoned;
+use jiff::{SpanRound, Unit, Zoned};
 use similar::{ChangeTag, DiffOp, TextDiff};
 
 // pub trait Fragment {
@@ -42,7 +42,16 @@ pub fn host(host: &api::Host) -> anyhow::Result<String> {
     writeln!(
         &mut w,
         " \u{2022} Last Seen: {}",
-        format!("{:#}", &Zoned::now() - &host.last_ping)
+        format!(
+            "{:#}",
+            (&Zoned::now() - &host.last_ping)
+                .round(
+                    SpanRound::new()
+                        .smallest(Unit::Second)
+                        .mode(jiff::RoundMode::Trunc)
+                )
+                .unwrap()
+        )
     )?;
 
     Ok(String::from_utf8(w)?)

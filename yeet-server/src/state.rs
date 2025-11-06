@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum_thiserror::ErrorStatus;
 use httpsig_hyper::prelude::{AlgorithmName, PublicKey, VerifyingKey as _};
 use jiff::{ToSpan as _, Zoned};
-use rand::RngCore as _;
+use rand::{Rng, RngCore as _};
 use serde_json_any_key::any_key_map;
 use std::{
     cmp::Ordering,
@@ -42,11 +42,15 @@ pub enum StateError {
     #[status(StatusCode::BAD_REQUEST)]
     KeyPendingVerification,
 
+    #[error("Provided key is already verified")]
+    #[status(StatusCode::BAD_REQUEST)]
+    KeyAlreadyInUse,
+
     #[error("Verification attempt with code {0} not found")]
     #[status(StatusCode::BAD_REQUEST)]
     AttemptNotFound(u32),
 
-    #[error("There is no host `{0} pre registered`")]
+    #[error("There is no host `{0}` pre registered")]
     #[status(StatusCode::BAD_REQUEST)]
     PreRegisterNotFound(String),
 }
@@ -104,7 +108,11 @@ impl AppState {
             return Err(StateError::KeyPendingVerification);
         }
 
-        let verification = rand::rng().next_u32();
+        if self.keyids.values().any(|key| key == &attempt.key) {
+            return Err(StateError::KeyAlreadyInUse);
+        }
+
+        let verification = rand::rng().random_range(100_000..=999_999);
 
         self.verification_attempt
             .insert(verification, (attempt, Zoned::now()));
@@ -114,13 +122,21 @@ impl AppState {
 
     pub fn verify_attempt(&mut self, acceptance: api::VerificationAcceptance) -> Result<()> {
         self.drain_verification_attempts();
-        let Some((attempt, first_ping)) = self.verification_attempt.remove(&acceptance.code) else {
-            return Err(StateError::AttemptNotFound(acceptance.code));
-        };
 
-        let Some(state) = self.pre_register_host.remove(&acceptance.host_name) else {
+        if !self.pre_register_host.contains_key(&acceptance.host_name) {
             return Err(StateError::PreRegisterNotFound(acceptance.host_name));
-        };
+        }
+
+        if !self.verification_attempt.contains_key(&acceptance.code) {
+            return Err(StateError::AttemptNotFound(acceptance.code));
+        }
+
+        let (attempt, first_ping) = self.verification_attempt.remove(&acceptance.code).unwrap();
+
+        let state = self
+            .pre_register_host
+            .remove(&acceptance.host_name)
+            .unwrap();
 
         let signing_key = PublicKey::from_bytes(AlgorithmName::Ed25519, attempt.key.as_bytes())
             .expect("Verifying key already is validated");

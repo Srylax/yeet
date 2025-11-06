@@ -129,4 +129,22 @@ pub enum ServerCommands {
     },
     /// Check if a key is verified
     VerifyStatus,
+    /// Adds a key to the server for verification
+    AddVerification {
+        /// Store path of the current running system
+        #[arg(long)]
+        store_path: String,
+        /// The public key the of the verification attempt
+        #[arg(long)]
+        public_key: PathBuf,
+    },
+    /// Approve a pending key verification with the corresponding code
+    VerifyAttempt {
+        /// Pet name for the host
+        #[arg(index = 1)]
+        name: String,
+        /// Verification code
+        #[arg(index = 2)]
+        code: u32,
+    },
 }

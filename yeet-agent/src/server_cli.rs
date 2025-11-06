@@ -5,7 +5,7 @@ use yeet_agent::{cachix, display::diff_inline, nix, server};
 
 use crate::{
     cli::{Config, ServerCommands},
-    get_key, status_string,
+    get_key, get_pub_key, status_string,
 };
 
 pub async fn handle_server_commands(
@@ -109,6 +109,32 @@ pub async fn handle_server_commands(
         ServerCommands::VerifyStatus => {
             let status =
                 server::is_host_verified(&config.url, get_key(&config.httpsig_key)?).await?;
+            println!("{status}");
+        }
+        ServerCommands::AddVerification {
+            store_path,
+            public_key,
+        } => {
+            let code = server::add_verification_attempt(
+                &config.url,
+                &api::VerificationAttempt {
+                    store_path,
+                    key: get_pub_key(&public_key)?,
+                },
+            )
+            .await?;
+            println!("{code}");
+        }
+        ServerCommands::VerifyAttempt { name, code } => {
+            let status = server::verify_attempt(
+                &config.url,
+                get_key(&config.httpsig_key)?,
+                &api::VerificationAcceptance {
+                    code,
+                    host_name: name,
+                },
+            )
+            .await?;
             println!("{status}");
         }
     }
