@@ -25,7 +25,7 @@ pub async fn update_hosts(
 
     state.auth_build(&http_key)?;
 
-    state.update_hosts(hosts, public_key, substitutor)?;
+    state.update_hosts(hosts, public_key, substitutor);
 
     Ok(StatusCode::CREATED)
 }

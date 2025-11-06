@@ -11,9 +11,10 @@ Create a new authtoken on cachix.
 `yeet-server`
 
 You check out your current build with `yeet vm my-nixos` (only for nixos not for darwin)
-`yeet status`
+`yeet publish --cachix <cache>` -> client are now listed as unverified 
+*Get the code from your vm via*
+`yeet approve aegis <code>` -> Client is now listed as verified
 *Edit the file my-nixos/configuration.nix and add ripgrep*:
-
-`yeet publish --cachix <name>`
-`yeet monitor` [TODO]
+`yeet publish --cachix <cache>` -> client are now listed as unverified 
+*Client automatically get the update*
 `yeet log mynixos` [TODO]

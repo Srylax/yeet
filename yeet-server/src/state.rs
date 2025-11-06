@@ -20,10 +20,6 @@ pub enum StateError {
     #[status(StatusCode::FORBIDDEN)]
     HostNotFound,
 
-    #[error("Hosts not found: {0:?}")]
-    #[status(StatusCode::BAD_REQUEST)]
-    MultipleHostsNotFound(Vec<String>),
-
     #[error("The request is authenticated but you lack admin credentials")]
     #[status(StatusCode::FORBIDDEN)]
     AuthMissingAdmin,
@@ -231,16 +227,21 @@ impl AppState {
         hosts: HashMap<String, api::StorePath>,
         public_key: String,
         substitutor: String,
-    ) -> Result<()> {
+    ) {
         let unknown_hosts = hosts
             .iter()
             .filter(|(name, _)| !self.key_by_name.contains_key(*name))
-            .map(|(name, _)| name)
-            .cloned()
             .collect::<Vec<_>>();
 
-        if !unknown_hosts.is_empty() {
-            return Err(StateError::MultipleHostsNotFound(unknown_hosts));
+        for (host, store_path) in unknown_hosts {
+            self.pre_register_host(
+                host.clone(),
+                api::ProvisionState::Provisioned(api::Version {
+                    store_path: store_path.clone(),
+                    substitutor: substitutor.clone(),
+                    public_key: public_key.clone(),
+                }),
+            );
         }
 
         for (name, store_path) in hosts {
@@ -255,8 +256,6 @@ impl AppState {
 
             host.push_update(version);
         }
-
-        Ok(())
     }
 
     fn host_by_name_mut(&mut self, host: &String) -> Option<&mut Host> {

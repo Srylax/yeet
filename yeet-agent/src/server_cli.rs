@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{anyhow, bail};
-use yeet_agent::{cachix, display::diff_inline, nix, server};
+use yeet_agent::{display::diff_inline, server};
 
 use crate::{
     cli::{Config, ServerCommands},
@@ -66,46 +65,7 @@ pub async fn handle_server_commands(
             let after = status_string(&config.url, &config.httpsig_key).await?;
             println!("{}", diff_inline(&before, &after));
         }
-        ServerCommands::Publish { path, host } => {
-            let before = status_string(&config.url, &config.httpsig_key).await?;
 
-            let hosts = nix::build_hosts(
-                &path.to_string_lossy(),
-                host,
-                std::env::consts::ARCH == "aarch64",
-            )?;
-
-            if hosts.is_empty() {
-                bail!("No hosts found - did you commit your files?")
-            }
-
-            let cache_info = cachix::get_cachix_info(config.cachix.clone().ok_or(anyhow!(
-                "Cachix cache name required. Set it in config or via the --cachix flag"
-            ))?)
-            .await?;
-
-            let public_key = cache_info
-                .public_signing_keys
-                .first()
-                .cloned()
-                .ok_or(anyhow!("Cachix cache has no public signing keys"))?;
-
-            println!("{hosts:?}");
-            cachix::push_paths(hosts.values(), cache_info.name).await?;
-
-            server::update(
-                &config.url,
-                &get_sig_key(&config.httpsig_key)?,
-                &api::HostUpdateRequest {
-                    hosts,
-                    public_key,
-                    substitutor: cache_info.uri,
-                },
-            )
-            .await?;
-            let after = status_string(&config.url, &config.httpsig_key).await?;
-            println!("{}", diff_inline(&before, &after));
-        }
         ServerCommands::VerifyStatus => {
             let status =
                 server::is_host_verified(&config.url, &get_sig_key(&config.httpsig_key)?).await?;

@@ -47,6 +47,15 @@ pub enum Commands {
         #[arg(short, long, default_value = "30")]
         sleep: u64,
     },
+    /// Build and then publish some or all hosts in a flake
+    Publish {
+        /// Path to flake
+        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
+        path: PathBuf,
+        /// Hosts to build - default is all
+        #[arg(long)]
+        host: Vec<String>,
+    },
     /// Build some or all hosts in a flake
     Build {
         /// Path to flake
@@ -82,15 +91,6 @@ pub struct ServerArgs {
 
 #[derive(Subcommand)]
 pub enum ServerCommands {
-    /// Build and then publish some or all hosts in a flake
-    Publish {
-        /// Path to flake
-        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
-        path: PathBuf,
-        /// Hosts to build - default is all
-        #[arg(long)]
-        host: Vec<String>,
-    },
     /// Update a host e.g. push a new `store_path` TODO: batch update
     Update {
         /// Name of the host
