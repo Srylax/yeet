@@ -224,14 +224,13 @@ impl AppState {
     /// This means that for each origin e.g. cachix, you need to call update seperately
     pub fn update_hosts(
         &mut self,
-        hosts: HashMap<String, api::StorePath>,
+        mut hosts: HashMap<String, api::StorePath>,
         public_key: String,
         substitutor: String,
     ) {
         let unknown_hosts = hosts
-            .iter()
-            .filter(|(name, _)| !self.key_by_name.contains_key(*name))
-            .collect::<Vec<_>>();
+            .extract_if(|name, _store| !self.key_by_name.contains_key(name))
+            .collect::<HashMap<String, api::StorePath>>();
 
         for (host, store_path) in unknown_hosts {
             self.pre_register_host(

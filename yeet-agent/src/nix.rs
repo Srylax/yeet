@@ -38,6 +38,7 @@ pub fn run_vm(flake_path: &Path, system: &str) -> anyhow::Result<()> {
 }
 
 // TODO: build multiple hosts at once
+// TODO: limit output
 pub fn build_hosts(
     flake_path: &str,
     hosts: Vec<String>,

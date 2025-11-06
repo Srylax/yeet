@@ -26,7 +26,7 @@ mod server_cli;
 #[expect(clippy::too_many_lines)]
 #[expect(clippy::unwrap_in_result)]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let xdg_dirs = xdg::BaseDirectories::with_prefix("yeet");
     let args = Yeet::try_parse()?;
     let config: Config = Figment::new()

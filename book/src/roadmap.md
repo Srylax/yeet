@@ -2,3 +2,4 @@
 - TPM key support / move away from ssh key on host -> create own
 - implement proper logging: https://github.com/kanidm/kanidm/blob/ea583e735af70a2e1ea2621b768aaf700bae94d1/libs/sketching/Cargo.toml
 - Include commit message in update version
+- multiple tenants on a single server
