@@ -1,5 +1,5 @@
 [package]
-name = "yeet-server"
+name = "yeetd"
 version = "0.1.0"
 edition = "2024"
 categories = []
@@ -7,7 +7,7 @@ keywords = ["nix", "deployment", "pull-based"]
 repository = "https://github.com/Srylax/yeet"
 license = "AGPL-3.0-or-later"
 readme = "README.MD"
-description = "Pull-based NixOs deployment server+agent"
+description = "Pull-based NixOs deployment server"
 
 [lints]
 workspace = true

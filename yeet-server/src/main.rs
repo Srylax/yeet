@@ -12,6 +12,7 @@ use ed25519_dalek::pkcs8::EncodePrivateKey as _;
 use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
 use parking_lot::RwLock;
 use routes::status;
+use std::env;
 use std::fs::{File, OpenOptions, rename};
 use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use std::os::unix::prelude::FileExt as _;
@@ -63,7 +64,10 @@ async fn main() {
         tokio::spawn(async move { save_state(&state).await });
     };
 
-    let listener = TcpListener::bind("localhost:3000")
+    let port = env::var("YEET_PORT").unwrap_or("4337".to_owned());
+    let host = env::var("YEET_HOST").unwrap_or("localhost".to_owned());
+
+    let listener = TcpListener::bind(format!("{host}:{port}"))
         .await
         .expect("Could not bind to port");
     axum::serve(listener, routes(state))

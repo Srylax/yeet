@@ -13,9 +13,9 @@ use figment::providers::{Env, Format as _, Serialized, Toml};
 use httpsig_hyper::prelude::SecretKey;
 use log::info;
 use url::Url;
-use yeet_agent::display::diff_inline;
-use yeet_agent::nix::{self, run_vm};
-use yeet_agent::{cachix, display, server};
+use yeet::display::diff_inline;
+use yeet::nix::{self, run_vm};
+use yeet::{cachix, display, server};
 
 use crate::cli::{Commands, Config, Yeet};
 

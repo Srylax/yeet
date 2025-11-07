@@ -1,5 +1,5 @@
 [package]
-name = "yeet-agent"
+name = "yeet"
 version = "0.1.0"
 edition = "2024"
 categories = []
@@ -8,10 +8,6 @@ repository = "https://github.com/Srylax/yeet"
 license = "AGPL-3.0-or-later"
 readme = "README.MD"
 description = "Pull-based NixOs deployment agent"
-
-[[bin]]
-name = "yeet"
-path = "src/main.rs"
 
 [dependencies]
 reqwest = { version = "0.12", features = ["json"] }

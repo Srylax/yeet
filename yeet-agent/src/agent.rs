@@ -13,7 +13,7 @@ use std::{
     process::Command,
 };
 use tokio::time;
-use yeet_agent::server;
+use yeet::server;
 
 use anyhow::bail;
 use log::{error, info};

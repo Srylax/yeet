@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use log::info;
-use yeet_agent::{display::diff_inline, server};
+use yeet::{display::diff_inline, server};
 
 use crate::{
     cli::{Config, ServerCommands},

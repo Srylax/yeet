@@ -6,17 +6,23 @@
 }:
 with lib;
 let
-  cfg = config.services.yeet-server;
+  cfg = config.services.yeetd;
 in
 {
   meta.maintainers = [ lib.maintainers.Srylax ];
 
-  options.services.yeet-server = {
+  options.services.yeetd = {
     enable = mkEnableOption "Yeet Server: https://github.com/Srylax/yeet";
 
     port = mkOption {
       type = types.port;
       description = "Yeet-API Port";
+    };
+
+    host = lib.mkOption {
+      type = lib.types.str;
+      default = "localhost";
+      description = "The listen host for HTTP API";
     };
 
     user = mkOption {
@@ -35,16 +41,17 @@ in
       '';
     };
 
-    package = mkPackageOption pkgs "yeet-server" { };
+    package = mkPackageOption pkgs "yeetd" { };
   };
 
   config = mkIf cfg.enable {
-    systemd.services.yeet-agent = {
+    systemd.services.yeetd = {
       description = "Yeet Server";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
 
       environment.YEET_PORT = "${cfg.port}";
+      environment.YEET_HOST = "${cfg.host}";
 
       serviceConfig = {
         User = cfg.user;
