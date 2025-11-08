@@ -43,22 +43,35 @@ pub struct RemoteStorePath {
     pub substitutor: String,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize)]
 pub struct RegisterHost {
     pub provision_state: ProvisionState,
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 pub struct VerificationAttempt {
     pub key: VerifyingKey,
     pub store_path: StorePath,
 }
 
-#[derive(Serialize, Deserialize, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 pub struct VerificationAcceptance {
     pub code: u32,
     pub host_name: String,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
+pub struct AddKey {
+    pub key: VerifyingKey,
+    pub level: AuthLevel,
+}
+
+#[expect(clippy::exhaustive_structs)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy)]
+pub enum AuthLevel {
+    Build,
+    Admin,
 }
 
 // values that are needed at start:

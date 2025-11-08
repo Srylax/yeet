@@ -1,6 +1,6 @@
 use std::{env::current_dir, path::PathBuf};
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -147,4 +147,27 @@ pub enum ServerCommands {
         #[arg(index = 2)]
         code: u32,
     },
+    /// Add a new admin or build key to the server
+    AddKey {
+        /// Public key to add
+        #[arg(index = 1)]
+        key: PathBuf,
+        /// Should the key be added as admin or as build
+        #[arg(value_enum)]
+        admin: AuthLevel,
+    },
+    /// Remove a key from the server (can also used to remove hosts)
+    RemoveKey {
+        /// Public key to remove
+        #[arg(index = 1)]
+        key: PathBuf,
+    },
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum AuthLevel {
+    /// New Admin Level key [CAUTION]
+    Admin,
+    /// New key for build pipelines
+    Build,
 }

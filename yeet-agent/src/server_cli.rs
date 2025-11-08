@@ -4,7 +4,7 @@ use log::info;
 use yeet::{display::diff_inline, server};
 
 use crate::{
-    cli::{Config, ServerCommands},
+    cli::{AuthLevel, Config, ServerCommands},
     get_sig_key, get_verify_key, status_string,
 };
 
@@ -66,7 +66,6 @@ pub async fn handle_server_commands(
             let after = status_string(&config.url, &config.httpsig_key).await?;
             info!("{}", diff_inline(&before, &after));
         }
-
         ServerCommands::VerifyStatus => {
             let status =
                 server::is_host_verified(&config.url, &get_sig_key(&config.httpsig_key)?).await?;
@@ -94,6 +93,32 @@ pub async fn handle_server_commands(
                     code,
                     host_name: name,
                 },
+            )
+            .await?;
+            info!("{status}");
+        }
+        ServerCommands::AddKey { key, admin } => {
+            let level = if admin == AuthLevel::Admin {
+                api::AuthLevel::Admin
+            } else {
+                api::AuthLevel::Build
+            };
+            let status = server::add_key(
+                &config.url,
+                &get_sig_key(&config.httpsig_key)?,
+                &api::AddKey {
+                    key: get_verify_key(&key)?,
+                    level,
+                },
+            )
+            .await?;
+            info!("{status}");
+        }
+        ServerCommands::RemoveKey { key } => {
+            let status = server::remove_key(
+                &config.url,
+                &get_sig_key(&config.httpsig_key)?,
+                &get_verify_key(&key)?,
             )
             .await?;
             info!("{status}");

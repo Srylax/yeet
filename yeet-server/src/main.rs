@@ -1,5 +1,6 @@
 //! Yeet that Config
 
+use crate::routes::key::{add_key, remove_key};
 use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 use crate::routes::update::update_hosts;
@@ -25,6 +26,7 @@ mod error;
 mod httpsig;
 mod state;
 mod routes {
+    pub mod key;
     pub mod register;
     pub mod status;
     pub mod system_check;
@@ -55,7 +57,7 @@ async fn main() {
         key.write_pkcs8_pem_file("yeet-admin.pem", LineEnding::LF)
             .expect("Could not write the admin credential file");
         println!("Written to file `yeet-admin.pem`");
-        state.add_admin_key(key.verifying_key());
+        state.add_key(key.verifying_key(), api::AuthLevel::Admin);
     }
 
     let state = Arc::new(RwLock::new(state));
@@ -83,6 +85,8 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .route("/system/verify/accept", post(verify_attempt))
         .route("/system/verify", get(is_host_verified))
         .route("/system/verify", post(add_verification_attempt))
+        .route("/key/add", post(add_key))
+        .route("/key/remove", post(remove_key))
         .route("/status", get(status::status))
         .with_state(state)
 }

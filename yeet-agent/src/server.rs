@@ -117,6 +117,38 @@ pub async fn system_check<K: SigningKey + Sync>(
         .await
 }
 
+pub async fn add_key<K: SigningKey + Sync>(
+    url: &Url,
+    key: &K,
+    add_key: &api::AddKey,
+) -> anyhow::Result<StatusCode> {
+    Client::new()
+        .post(url.join("/key/add")?)
+        .json(add_key)
+        .sign(&sig_param(key)?, key)
+        .await?
+        .send()
+        .await?
+        .error_for_code()
+        .await
+}
+
+pub async fn remove_key<K: SigningKey + Sync>(
+    url: &Url,
+    key: &K,
+    remove_key: &ed25519_dalek::VerifyingKey,
+) -> anyhow::Result<StatusCode> {
+    Client::new()
+        .post(url.join("/key/remove")?)
+        .json(remove_key)
+        .sign(&sig_param(key)?, key)
+        .await?
+        .send()
+        .await?
+        .error_for_code()
+        .await
+}
+
 fn sig_param<K: SigningKey + Sync>(key: &K) -> anyhow::Result<HttpSignatureParams> {
     let mut signature_params = HttpSignatureParams::try_new(&COMPONENTS)?;
     signature_params.set_key_info(key);

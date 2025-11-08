@@ -58,12 +58,12 @@ pub struct AppState {
     admin_credentials: HashSet<VerifyingKey>,
     build_machines_credentials: HashSet<VerifyingKey>,
     // key -> Hosts
-    #[serde(with = "any_key_map")]
-    hosts: HashMap<VerifyingKey, api::Host>,
+    hosts: HashMap<String, api::Host>,
     //  keyid -> Key for httpsig
     keyids: HashMap<String, VerifyingKey>,
     // Maps name to the public key
-    key_by_name: HashMap<String, VerifyingKey>,
+    #[serde(with = "any_key_map")]
+    host_by_key: HashMap<VerifyingKey, String>,
     // 6 digit number -> unverified pub key
     verification_attempt: HashMap<u32, (api::VerificationAttempt, Zoned)>,
 
@@ -137,10 +137,10 @@ impl AppState {
         let signing_key = PublicKey::from_bytes(AlgorithmName::Ed25519, attempt.key.as_bytes())
             .expect("Verifying key already is validated");
 
-        self.key_by_name
-            .insert(acceptance.host_name.clone(), attempt.key);
+        self.host_by_key
+            .insert(attempt.key, acceptance.host_name.clone());
         self.hosts.insert(
-            attempt.key,
+            acceptance.host_name.clone(),
             api::Host {
                 name: acceptance.host_name,
                 last_ping: first_ping.clone(),
@@ -190,7 +190,11 @@ impl AppState {
         store_path: String,
         key: &VerifyingKey,
     ) -> Result<api::AgentAction> {
-        let host = self.hosts.get_mut(key).ok_or(StateError::HostNotFound)?;
+        let hostname = self.host_by_key.get(key).ok_or(StateError::HostNotFound)?;
+        let host = self
+            .hosts
+            .get_mut(hostname)
+            .ok_or(StateError::HostNotFound)?;
 
         let action = match host.provision_state.clone() {
             api::ProvisionState::NotSet => api::AgentAction::Nothing,
@@ -229,7 +233,7 @@ impl AppState {
         substitutor: String,
     ) {
         let unknown_hosts = hosts
-            .extract_if(|name, _store| !self.key_by_name.contains_key(name))
+            .extract_if(|name, _store| !self.hosts.contains_key(name))
             .collect::<HashMap<String, api::StorePath>>();
 
         for (host, store_path) in unknown_hosts {
@@ -245,7 +249,8 @@ impl AppState {
 
         for (name, store_path) in hosts {
             let host = self
-                .host_by_name_mut(&name)
+                .hosts
+                .get_mut(&name)
                 .expect("Race condition because we checked above - maybe change this TOCTOU");
             let version = api::RemoteStorePath {
                 store_path: store_path.clone(),
@@ -257,24 +262,12 @@ impl AppState {
         }
     }
 
-    fn host_by_name_mut(&mut self, host: &String) -> Option<&mut Host> {
-        self.hosts.get_mut(self.key_by_name.get(host)?)
-    }
-
     pub fn auth_build(&self, key: &VerifyingKey) -> Result<()> {
         if self.admin_credentials.contains(key) || self.build_machines_credentials.contains(key) {
             Ok(())
         } else {
             Err(StateError::AuthMissingBuild)
         }
-    }
-
-    // lol maybe add something for that
-    pub fn add_build(&mut self, key: VerifyingKey) {
-        let signing_key = PublicKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
-            .expect("Verifying key already is validated");
-        self.build_machines_credentials.insert(key);
-        self.keyids.insert(signing_key.key_id(), key);
     }
 
     pub fn auth_admin(&self, key: &VerifyingKey) -> Result<()> {
@@ -285,15 +278,28 @@ impl AppState {
         }
     }
 
-    pub(crate) fn hosts(&self) -> hash_map::Values<'_, VerifyingKey, api::Host> {
+    pub(crate) fn hosts(&self) -> hash_map::Values<'_, String, api::Host> {
         self.hosts.values()
     }
 
-    pub fn add_admin_key(&mut self, key: VerifyingKey) {
+    pub fn add_key(&mut self, key: VerifyingKey, level: api::AuthLevel) {
         let signing_key = PublicKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
             .expect("Could not convert ED25519 key to httpsig key - wtf");
-        self.admin_credentials.insert(key);
+        if level == api::AuthLevel::Admin {
+            self.admin_credentials.insert(key);
+        } else {
+            self.build_machines_credentials.insert(key);
+        }
         self.keyids.insert(signing_key.key_id(), key);
+    }
+
+    pub fn remove_key(&mut self, key: &VerifyingKey) {
+        let signing_key = PublicKey::from_bytes(AlgorithmName::Ed25519, key.as_bytes())
+            .expect("Could not convert ED25519 key to httpsig key - wtf");
+        self.admin_credentials.remove(key);
+        self.build_machines_credentials.remove(key);
+        self.host_by_key.remove(key);
+        self.keyids.remove(&signing_key.key_id());
     }
 
     pub fn has_admin_credential(&self) -> bool {
