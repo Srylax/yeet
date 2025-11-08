@@ -1,4 +1,5 @@
 use anyhow::{Ok, anyhow};
+use api::key::{get_secret_key, get_verify_key};
 use backon::{ConstantBuilder, Retryable as _};
 use ed25519_dalek::pkcs8::DecodePrivateKey;
 use ed25519_dalek::{SigningKey, VerifyingKey};
@@ -31,23 +32,8 @@ static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 ///         pull the verify endpoint in a time intervall
 /// 2. Continuosly pull the system endpoint and execute based on the provided
 pub async fn agent(config: &Config, sleep: u64) -> anyhow::Result<()> {
-    let secret_key = read_to_string(&config.httpsig_key)?;
-    let (pub_key, key) = if secret_key.contains("BEGIN OPENSSH PRIVATE KEY") {
-        let key = PrivateKey::from_openssh(secret_key)?;
-        let bytes = key
-            .key_data()
-            .ed25519()
-            .ok_or(anyhow!("Key is not of type ED25519"))?
-            .private
-            .to_bytes();
-        let pub_key = SigningKey::from_bytes(&bytes).verifying_key();
-        let key = SecretKey::from_bytes(AlgorithmName::Ed25519, &bytes)?;
-        (pub_key, key)
-    } else {
-        let pub_key = SigningKey::from_pkcs8_pem(secret_key.as_str())?.verifying_key();
-        let key = SecretKey::from_pem(secret_key.as_str())?;
-        (pub_key, key)
-    };
+    let key = get_secret_key(&config.httpsig_key)?;
+    let pub_key = get_verify_key(&config.httpsig_key)?;
 
     (|| async { agent_loop(config, &key, pub_key, sleep).await })
         .retry(

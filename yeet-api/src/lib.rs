@@ -7,6 +7,7 @@ use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
 pub mod httpsig;
+pub mod key;
 pub mod status;
 
 pub type StorePath = String;

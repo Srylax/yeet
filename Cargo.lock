@@ -4186,6 +4186,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json_any_key",
+ "ssh-key",
  "thiserror 2.0.17",
  "tokio",
 ]

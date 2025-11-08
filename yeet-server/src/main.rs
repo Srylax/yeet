@@ -6,11 +6,9 @@ use crate::routes::system_check::system_check;
 use crate::routes::update::update_hosts;
 use crate::routes::verify::{add_verification_attempt, is_host_verified, verify_attempt};
 use crate::state::AppState;
+use api::key::get_verify_key;
 use axum::Router;
 use axum::routing::{get, post};
-use ed25519_dalek::SigningKey;
-use ed25519_dalek::pkcs8::EncodePrivateKey as _;
-use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
 use parking_lot::RwLock;
 use routes::status;
 use std::env;
@@ -44,20 +42,15 @@ async fn main() {
     let mut state = File::open("state.json")
         .map(serde_json::from_reader)
         .unwrap_or(Ok(AppState::default()))
-        .unwrap_or_else(|_err| {
-            println!("Could not parse state.json. Moving old state.json to state.json.old");
-            rename("state.json", "state.json.old").expect("Could not move unreadable config");
-            AppState::default()
-        });
+        .expect("Could not parse state.json - missing migration");
 
     // TODO: make this interactive if interactive shell found
     if !state.has_admin_credential() {
-        println!("Creating new admin credentials");
-        let key = SigningKey::generate(&mut rand_core::OsRng);
-        key.write_pkcs8_pem_file("yeet-admin.pem", LineEnding::LF)
-            .expect("Could not write the admin credential file");
-        println!("Written to file `yeet-admin.pem`");
-        state.add_key(key.verifying_key(), api::AuthLevel::Admin);
+        let key_location = env::var("YEET_INIT_KEY")
+            .expect("Cannot start without an init key. Set it via `YEET_INIT_KEY`");
+
+        let key = get_verify_key(key_location).expect("Not a valid key");
+        state.add_key(key, api::AuthLevel::Admin);
     }
 
     let state = Arc::new(RwLock::new(state));
@@ -97,13 +90,15 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
     reason = "Save state as long as the server is running"
 )]
 async fn save_state(state: &Arc<RwLock<AppState>>) {
+    let state_location = env::var("YEET_STATE").unwrap_or("state.json".to_owned());
+
     let mut interval = interval(Duration::from_millis(500));
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open("state.json")
+        .open(state_location)
         .expect("Could not open state.json");
 
     let mut hash = 0;

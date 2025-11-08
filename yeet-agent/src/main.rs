@@ -1,16 +1,13 @@
 //! # Yeet Agent
 
-use std::fs::read_to_string;
 use std::path::Path;
 
 use anyhow::anyhow;
 use anyhow::{Ok, Result, bail};
+use api::key::get_secret_key;
 use clap::Parser as _;
-use ed25519_dalek::VerifyingKey;
-use ed25519_dalek::pkcs8::DecodePublicKey as _;
 use figment::Figment;
 use figment::providers::{Env, Format as _, Serialized, Toml};
-use httpsig_hyper::prelude::SecretKey;
 use log::info;
 use url::Url;
 use yeet::display::diff_inline;
@@ -84,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
             let before = status_string(&config.url, &config.httpsig_key).await?;
             server::update(
                 &config.url,
-                &get_sig_key(&config.httpsig_key)?,
+                &get_secret_key(&config.httpsig_key)?,
                 &api::HostUpdateRequest {
                     hosts,
                     public_key,
@@ -101,19 +98,11 @@ async fn main() -> anyhow::Result<()> {
 }
 
 pub(crate) async fn status_string(url: &Url, httpsig_key: &Path) -> anyhow::Result<String> {
-    let status = server::status(url, &get_sig_key(httpsig_key)?).await?;
+    let status = server::status(url, &get_secret_key(httpsig_key)?).await?;
     let rows = status
         .into_iter()
         .map(|host| display::host(&host))
         .collect::<Result<Vec<_>>>()?;
 
     Ok(rows.join("\n"))
-}
-
-pub(crate) fn get_sig_key(path: &Path) -> anyhow::Result<SecretKey> {
-    Ok(SecretKey::from_pem(&read_to_string(path)?)?)
-}
-
-pub(crate) fn get_verify_key(path: &Path) -> anyhow::Result<VerifyingKey> {
-    Ok(VerifyingKey::from_public_key_pem(&read_to_string(path)?)?)
 }
