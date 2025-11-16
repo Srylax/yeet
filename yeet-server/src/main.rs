@@ -49,7 +49,7 @@ async fn main() {
         let key_location = env::var("YEET_INIT_KEY")
             .expect("Cannot start without an init key. Set it via `YEET_INIT_KEY`");
 
-        let key = get_verify_key(key_location).expect("Not a valid key");
+        let key = get_verify_key(key_location).expect("Not a valid key {key_location}");
         state.add_key(key, api::AuthLevel::Admin);
     }
 
