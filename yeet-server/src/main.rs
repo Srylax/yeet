@@ -1,48 +1,35 @@
 //! Yeet that Config
 
+use crate::routes::key::{add_key, remove_key};
 use crate::routes::register::register_host;
 use crate::routes::system_check::system_check;
 use crate::routes::update::update_hosts;
+use crate::routes::verify::{add_verification_attempt, is_host_verified, verify_attempt};
+use crate::state::AppState;
+use api::key::get_verify_key;
 use axum::Router;
 use axum::routing::{get, post};
-use ed25519_dalek::VerifyingKey;
-use jiff::Zoned;
 use parking_lot::RwLock;
 use routes::status;
-use serde::{Deserialize, Serialize};
-use serde_json_any_key::any_key_map;
-use ssh_key::PublicKey;
-use std::collections::{HashMap, HashSet};
+use std::env;
 use std::fs::{File, OpenOptions, rename};
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use std::os::unix::prelude::FileExt as _;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
-use tokio::time::interval;
-use yeet_api::{StorePath, VersionStatus};
+use tokio::time::interval; // TODO: is this enough or do we need to use rand_chacha?
 
 mod error;
+mod httpsig;
+mod state;
 mod routes {
+    pub mod key;
     pub mod register;
     pub mod status;
     pub mod system_check;
     pub mod update;
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Default)]
-struct AppState {
-    build_machines: HashSet<VerifyingKey>,
-    #[serde(with = "any_key_map")]
-    hosts: HashMap<VerifyingKey, Host>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
-struct Host {
-    last_ping: Option<Zoned>,
-    status: VersionStatus,
-    store_path: StorePath,
+    pub mod verify;
 }
 
 #[tokio::main]
@@ -55,19 +42,16 @@ async fn main() {
     let mut state = File::open("state.json")
         .map(serde_json::from_reader)
         .unwrap_or(Ok(AppState::default()))
-        .unwrap_or_else(|_err| {
-            println!("Could not parse state.json. Moving old state.json to state.json.old");
-            rename("state.json", "state.json.old").expect("Could not move unreadable config");
-            AppState::default()
-        });
+        .expect("Could not parse state.json - missing migration");
 
-    let key = PublicKey::read_openssh_file(Path::new("/etc/ssh/ssh_host_ed25519_key.pub"))
-        .expect("Signing key found but not valid");
+    // TODO: make this interactive if interactive shell found
+    if !state.has_admin_credential() {
+        let key_location = env::var("YEET_INIT_KEY")
+            .expect("Cannot start without an init key. Set it via `YEET_INIT_KEY`");
 
-    let key = VerifyingKey::from_bytes(&key.key_data().ed25519().expect("Not an Ed25519 key").0)
-        .expect("Found an Ed25519 key but could not parse it ");
-
-    state.build_machines.insert(key);
+        let key = get_verify_key(key_location).expect("Not a valid key {key_location}");
+        state.add_key(key, api::AuthLevel::Admin);
+    }
 
     let state = Arc::new(RwLock::new(state));
     {
@@ -75,7 +59,10 @@ async fn main() {
         tokio::spawn(async move { save_state(&state).await });
     };
 
-    let listener = TcpListener::bind("localhost:3000")
+    let port = env::var("YEET_PORT").unwrap_or("4337".to_owned());
+    let host = env::var("YEET_HOST").unwrap_or("localhost".to_owned());
+
+    let listener = TcpListener::bind(format!("{host}:{port}"))
         .await
         .expect("Could not bind to port");
     axum::serve(listener, routes(state))
@@ -88,6 +75,11 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .route("/system/check", post(system_check))
         .route("/system/register", post(register_host))
         .route("/system/update", post(update_hosts))
+        .route("/system/verify/accept", post(verify_attempt))
+        .route("/system/verify", get(is_host_verified))
+        .route("/system/verify", post(add_verification_attempt))
+        .route("/key/add", post(add_key))
+        .route("/key/remove", post(remove_key))
         .route("/status", get(status::status))
         .with_state(state)
 }
@@ -95,16 +87,18 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
 #[expect(
     clippy::expect_used,
     clippy::infinite_loop,
-    reason = "allow in server main"
+    reason = "Save state as long as the server is running"
 )]
 async fn save_state(state: &Arc<RwLock<AppState>>) {
+    let state_location = env::var("YEET_STATE").unwrap_or("state.json".to_owned());
+
     let mut interval = interval(Duration::from_millis(500));
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open("state.json")
+        .open(state_location)
         .expect("Could not open state.json");
 
     let mut hash = 0;
@@ -135,7 +129,7 @@ fn test_server(state: AppState) -> (TestServer, Arc<RwLock<AppState>>) {
     let app = routes(app_state);
     let server = TestServer::builder()
         .expect_success_by_default()
-        .mock_transport()
+        .http_transport()
         .build(app)
         .expect("Could not build TestServer");
     (server, app_state_copy)

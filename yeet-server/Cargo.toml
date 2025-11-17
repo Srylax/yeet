@@ -1,5 +1,5 @@
 [package]
-name = "yeet-server"
+name = "yeetd"
 version = "0.1.0"
 edition = "2024"
 categories = []
@@ -7,27 +7,33 @@ keywords = ["nix", "deployment", "pull-based"]
 repository = "https://github.com/Srylax/yeet"
 license = "AGPL-3.0-or-later"
 readme = "README.MD"
-description = "Pull-based NixOs deployment server+agent"
+description = "Pull-based NixOs deployment server"
 
 [lints]
 workspace = true
 
 
 [dependencies]
-axum = "0.8"
+axum = {version = "0.8", features = ["macros"]}
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.39", features = ["full"] }
-yeet-api = { path = "../yeet-api" }
+api = { path = "../yeet-api", package = "yeet-api"}
 parking_lot = { version = "0.12", features = ["arc_lock"] }
 memmap2 = "0.9"
 uuid = { version = "1.10", features = ["v7", "serde"] }
 jiff = {version = "0.2", features = ["serde"]}
-ssh-key = { version = "0.6", features = ["serde", "ed25519"] }
-ed25519-dalek = { version = "2.1", features = ["serde"] }
-serde_json_any_key = "2.0"
+# ssh-key = { version = "0.6", features = ["serde", "ed25519"] }
+ed25519-dalek = { version = "2.2", features = ["serde", "rand_core", "std", "pem"] }
+serde_json_any_key = {version = "2.0"}
+httpsig-hyper = "0.0.19"
+mime = "0.3"
+rand_core = { version = "0.6", features = ["std" ,] }
+thiserror = "2.0.17"
+axum_thiserror = "0.1.0"
+rand = "0.9.2"
 
 
 [dev-dependencies]
-axum-test = "17.2"
+axum-test = {version = "18.1", features = ["reqwest"]}
 paste = "1.0"

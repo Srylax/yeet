@@ -1,172 +1,108 @@
 //! # Yeet Agent
 
-use std::fs::{read_link, File};
-use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::process::Command;
-use std::str;
-use std::thread::sleep;
-use std::time::Duration;
 
-use anyhow::{anyhow, bail, Ok, Result};
-use clap::{arg, Parser};
-use ed25519_dalek::ed25519::signature::SignerMut as _;
-use ed25519_dalek::SigningKey;
-use log::{error, info};
-use notify_rust::Notification;
-use reqwest::blocking::Client;
-use ssh_key::PrivateKey;
+use anyhow::anyhow;
+use anyhow::{Ok, Result, bail};
+use api::key::get_secret_key;
+use clap::Parser as _;
+use figment::Figment;
+use figment::providers::{Env, Format as _, Serialized, Toml};
+use log::info;
 use url::Url;
-use yeet_api::{Version, VersionRequest, VersionStatus};
+use yeet::display::diff_inline;
+use yeet::nix::{self, run_vm};
+use yeet::{cachix, display, server};
 
-#[derive(Parser)]
-#[command(version, about, long_about = None)]
-struct Yeet {
-    /// Base URL of the Yeet Server
-    #[arg(short, long)]
-    url: Url,
+use crate::cli::{Commands, Config, Yeet};
 
-    /// Seconds to wait between updates.
-    /// Lower bound, may be higher between switching versions
-    #[arg(short, long, default_value = "30")]
-    sleep: u64,
-}
+mod agent;
+mod cli;
+mod server_cli;
 
-fn main() -> ! {
-    env_logger::init();
-    loop {
-        if let Err(err) = main_loop() {
-            error!("{err}");
-        }
-        sleep(Duration::from_secs(60));
-    }
-}
-fn main_loop() -> Result<()> {
+#[tokio::main]
+#[expect(clippy::too_many_lines)]
+#[expect(clippy::unwrap_in_result)]
+async fn main() -> anyhow::Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let xdg_dirs = xdg::BaseDirectories::with_prefix("yeet");
     let args = Yeet::try_parse()?;
-    let check_url = args.url.join("system/check")?;
-    let key = PrivateKey::read_openssh_file(Path::new("/etc/ssh/ssh_host_ed25519_key"))?;
-
-    let mut key = SigningKey::from_bytes(
-        &key.key_data()
-            .ed25519()
-            .ok_or(anyhow!("Key is not of type ED25519"))?
-            .private
-            .to_bytes(),
-    );
-
-    loop {
-        let store_path = get_active_version()?;
-        let check = Client::new()
-            .post(check_url.as_str())
-            .json(&VersionRequest {
-                key: key.verifying_key(),
-                signature: key.sign(store_path.as_bytes()),
-                store_path,
-            })
-            .send()?;
-        if !check.status().is_success() {
-            bail!("Server Error ({}): {}", check.status(), check.text()?);
-        }
-        match check.json::<VersionStatus>()? {
-            VersionStatus::UpToDate => {
-                info!("UpToDate");
-            }
-            VersionStatus::NewVersionAvailable(version) => {
-                info!("NewVersionAvailable");
-                update(&version)?;
-            }
-        }
-        sleep(Duration::from_secs(args.sleep));
-    }
-}
-
-fn get_active_version() -> Result<String> {
-    Ok(read_link("/run/current-system")?
-        .to_string_lossy()
-        .to_string())
-}
-
-fn trusted_public_keys() -> Result<Vec<String>> {
-    let file = File::open("/etc/nix/nix.conf")?;
-    Ok(BufReader::new(file)
-        .lines()
-        .map_while(Result::ok)
-        .find(|line| line.starts_with("trusted-public-keys"))
-        .unwrap_or(String::from(
-            "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
+    let config: Config = Figment::new()
+        .merge(Toml::file(
+            xdg_dirs.find_config_file("agent.toml").unwrap_or_default(),
         ))
-        .split_whitespace()
-        .skip(2)
-        .map(str::to_owned)
-        .collect())
-}
+        .merge(Serialized::defaults(args.config))
+        .merge(Toml::file(".config/yeet.toml"))
+        .merge(Env::prefixed("YEET_"))
+        .extract()?;
+    match args.command {
+        Commands::Build { path, host } => {
+            info!(
+                "{:?}",
+                nix::build_hosts(
+                    &path.to_string_lossy(),
+                    host,
+                    std::env::consts::ARCH == "aarch64"
+                )?
+            );
+        }
+        Commands::VM { host, path } => run_vm(&path, &host)?,
+        Commands::Agent { sleep } => {
+            agent::agent(&config, sleep).await?;
+        }
+        Commands::Status => {
+            info!("{}", status_string(&config.url, &config.httpsig_key).await?);
+        }
+        Commands::Publish { path, host } => {
+            let hosts = nix::build_hosts(
+                &path.to_string_lossy(),
+                host,
+                std::env::consts::ARCH == "aarch64",
+            )?;
 
-fn update(version: &Version) -> Result<()> {
-    download(version)?;
-    activate(version)?;
-    Notification::new()
-        .summary("System Update")
-        .body("System has been updated successfully")
-        .appname("Yeet")
-        .show()?;
-    Ok(())
-}
+            if hosts.is_empty() {
+                bail!("No hosts found - did you commit your files?")
+            }
 
-fn download(version: &Version) -> Result<()> {
-    info!("Downloading {}", version.store_path);
-    let mut keys = trusted_public_keys()?;
-    keys.push(version.public_key.clone());
-    let download = Command::new("nix-store")
-        .args(vec![
-            "--realise",
-            &version.store_path,
-            "--option",
-            "extra-substituters",
-            &version.substitutor,
-            "--option",
-            "trusted-public-keys",
-            &keys.join(" "),
-            "--option",
-            "narinfo-cache-negative-ttl",
-            "0",
-        ])
-        .output()?;
-    if !download.status.success() {
-        bail!("{}", String::from_utf8(download.stderr)?);
+            let cache_info = cachix::get_cachix_info(config.cachix.clone().ok_or(anyhow!(
+                "Cachix cache name required. Set it in config or via the --cachix flag"
+            ))?)
+            .await?;
+
+            let public_key = cache_info
+                .public_signing_keys
+                .first()
+                .cloned()
+                .ok_or(anyhow!("Cachix cache has no public signing keys"))?;
+
+            info!("{hosts:?}");
+            cachix::push_paths(hosts.values(), cache_info.name).await?;
+
+            let before = status_string(&config.url, &config.httpsig_key).await?;
+            server::update(
+                &config.url,
+                &get_secret_key(&config.httpsig_key)?,
+                &api::HostUpdateRequest {
+                    hosts,
+                    public_key,
+                    substitutor: cache_info.uri,
+                },
+            )
+            .await?;
+            let after = status_string(&config.url, &config.httpsig_key).await?;
+            info!("{}", diff_inline(&before, &after));
+        }
+        Commands::Server(args) => server_cli::handle_server_commands(args.command, &config).await?,
     }
     Ok(())
 }
 
-fn set_system_profile(version: &Version) -> Result<()> {
-    info!("Setting system profile to {}", version.store_path);
-    let profile = Command::new("nix-env")
-        .args([
-            "--profile",
-            "/nix/var/nix/profiles/system",
-            "--set",
-            &version.store_path,
-        ])
-        .output()?;
-    if !profile.status.success() {
-        bail!("{}", String::from_utf8(profile.stderr)?);
-    }
-    Ok(())
-}
+pub(crate) async fn status_string(url: &Url, httpsig_key: &Path) -> anyhow::Result<String> {
+    let status = server::status(url, &get_secret_key(httpsig_key)?).await?;
+    let rows = status
+        .into_iter()
+        .map(|host| display::host(&host))
+        .collect::<Result<Vec<_>>>()?;
 
-#[cfg(target_os = "macos")]
-fn activate(version: &Version) -> Result<()> {
-    set_system_profile(version)?;
-    info!("Activating {}", version.store_path);
-    Command::new(Path::new(&version.store_path).join("activate")).spawn()?;
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn activate(version: &Version) -> Result<()> {
-    info!("Activating {}", version.store_path);
-    set_system_profile(version)?;
-    Command::new(Path::new(&version.store_path).join("bin/switch-to-configuration"))
-        .arg("switch")
-        .spawn()?;
-    Ok(())
+    Ok(rows.join("\n"))
 }

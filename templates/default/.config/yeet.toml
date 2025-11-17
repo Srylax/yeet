@@ -1,0 +1,2 @@
+url = "http://localhost:3000"
+httpsig_key = "yeet-admin.pem"
