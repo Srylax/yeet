@@ -41,7 +41,6 @@ in
 
     initKey = lib.mkOption {
       type = lib.types.path;
-      default = "/etc/ssh/ssh_host_ed25519_key.pub";
       description = ''
         When starting the server for the first time, an admin key must be given
         or else no one would be able to init the server.

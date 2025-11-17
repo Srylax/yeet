@@ -46,6 +46,7 @@ async fn main() {
 
     // TODO: make this interactive if interactive shell found
     if !state.has_admin_credential() {
+        // TODO: also accept the key directly
         let key_location = env::var("YEET_INIT_KEY")
             .expect("Cannot start without an init key. Set it via `YEET_INIT_KEY`");
 
