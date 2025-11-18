@@ -1,1 +1,5 @@
-![yfwnrm](https://i.kym-cdn.com/photos/images/newsfeed/001/042/619/4ea.jpg)
+# Yeet
+
+<div align="center">
+<img src="assets/yeet_banner.png" width="700" alt="yeet banner">
+</div>
