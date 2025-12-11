@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fs::{File, read_to_string},
+    io::Write,
+};
 
 use api::key::{get_secret_key, get_verify_key};
 use log::info;
@@ -76,19 +80,27 @@ pub async fn handle_server_commands(
         ServerCommands::AddVerification {
             store_path,
             public_key,
+            facter,
         } => {
+            let nixos_facter = if let Some(facter) = facter {
+                Some(read_to_string(facter)?)
+            } else {
+                None
+            };
+
             let code = server::add_verification_attempt(
                 &config.url,
                 &api::VerificationAttempt {
                     store_path,
                     key: get_verify_key(&public_key)?,
+                    artifacts: api::VerificationArtifacts { nixos_facter },
                 },
             )
             .await?;
             info!("{code}");
         }
-        ServerCommands::VerifyAttempt { name, code } => {
-            let status = server::verify_attempt(
+        ServerCommands::VerifyAttempt { name, code, facter } => {
+            let artifacts = server::verify_attempt(
                 &config.url,
                 &get_secret_key(&config.httpsig_key)?,
                 &api::VerificationAcceptance {
@@ -97,7 +109,10 @@ pub async fn handle_server_commands(
                 },
             )
             .await?;
-            info!("{status}");
+            if let Some(nixos_facter) = artifacts.nixos_facter {
+                File::create_new(&facter)?.write_all(nixos_facter.as_bytes())?;
+                info!("File {} written", facter.as_os_str().display())
+            }
         }
         ServerCommands::AddKey { key, admin } => {
             let level = if admin == AuthLevel::Admin {

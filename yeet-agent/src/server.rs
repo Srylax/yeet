@@ -89,7 +89,7 @@ pub async fn verify_attempt<K: SigningKey + Sync>(
     url: &Url,
     key: &K,
     acceptance: &api::VerificationAcceptance,
-) -> anyhow::Result<StatusCode> {
+) -> anyhow::Result<api::VerificationArtifacts> {
     Client::new()
         .post(url.join("/system/verify/accept")?)
         .json(acceptance)
@@ -97,7 +97,7 @@ pub async fn verify_attempt<K: SigningKey + Sync>(
         .await?
         .send()
         .await?
-        .error_for_code()
+        .error_for_json()
         .await
 }
 

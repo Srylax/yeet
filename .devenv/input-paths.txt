@@ -1,0 +1,7 @@
+/home/bsiag.local/kli/dev/workspaces/linux/yeet/.devenv/flake.json
+/home/bsiag.local/kli/dev/workspaces/linux/yeet/.devenv.flake.nix
+/home/bsiag.local/kli/dev/workspaces/linux/yeet/.env
+/home/bsiag.local/kli/dev/workspaces/linux/yeet/devenv.local.nix
+/home/bsiag.local/kli/dev/workspaces/linux/yeet/devenv.lock
+/home/bsiag.local/kli/dev/workspaces/linux/yeet/devenv.nix
+/home/bsiag.local/kli/dev/workspaces/linux/yeet/devenv.yaml
