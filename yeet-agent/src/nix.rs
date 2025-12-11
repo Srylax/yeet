@@ -6,7 +6,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use anyhow::{Ok, anyhow, bail};
+use anyhow::{Context, Ok, anyhow, bail};
 use serde_json::Value;
 
 // This command is used to run the virtual machine of a particular system
@@ -80,8 +80,9 @@ pub fn facter() -> anyhow::Result<String> {
     if !exit.success() {
         bail!("nixos-facter did not exist successfully")
     }
-    let facter = read_to_string("facter.json")?;
-    remove_file("facter.json")?;
+    let facter = read_to_string("facter.json")
+        .context("Facter did collect the data but `facter.json` does not exist")?;
+    remove_file("facter.json").context("`facter.json` read but could not clean up")?;
     Ok(facter)
 }
 

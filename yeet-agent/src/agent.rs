@@ -1,4 +1,4 @@
-use anyhow::Ok;
+use anyhow::{Context, Ok};
 use api::key::{get_secret_key, get_verify_key};
 use backon::{ConstantBuilder, Retryable as _};
 use ed25519_dalek::VerifyingKey;
@@ -111,7 +111,8 @@ fn agent_action(action: api::AgentAction) -> anyhow::Result<()> {
 }
 
 fn get_active_version() -> anyhow::Result<String> {
-    Ok(read_link("/run/current-system")?
+    Ok(read_link("/run/current-system")
+        .context("Current system has no `/run/current-system`")?
         .to_string_lossy()
         .to_string())
 }
