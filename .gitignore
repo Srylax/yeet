@@ -8,3 +8,14 @@ book/book
 *.pem
 *.pub
 templates/default/flake.lock
+
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
