@@ -64,7 +64,9 @@ async fn agent_loop(
 
         let nixos_facter = if facter {
             info!("Collecting nixos-facter information");
-            Some(nix::facter()?)
+            let facts = Some(nix::facter()?);
+            info!("Done collecting facts");
+            facts
         } else {
             None
         };

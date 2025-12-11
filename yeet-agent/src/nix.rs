@@ -75,8 +75,10 @@ pub fn build_hosts(
 pub fn facter() -> anyhow::Result<String> {
     let exit = Command::new("nixos-facter")
         .args(["-o", "facter.json"])
-        .spawn()?
-        .wait()?;
+        .spawn()
+        .context("Could not spawn `nixos-facter`")?
+        .wait()
+        .context("Could not wait for `nixos-facter`")?;
     if !exit.success() {
         bail!("nixos-facter did not exist successfully")
     }
