@@ -59,6 +59,14 @@ pub enum Commands {
         /// Hosts to build - default is all
         #[arg(long)]
         host: Vec<String>,
+        /// Which hosts should be built? Defaults to current ARCH
+        #[arg(
+            long,
+            default_value_t = std::env::consts::ARCH == "aarch64",
+            default_missing_value = (std::env::consts::ARCH == "aarch64").to_string(),
+            num_args = 0..=1,
+            require_equals = false)]
+        darwin: bool,
     },
     /// Build some or all hosts in a flake
     Build {
@@ -68,6 +76,14 @@ pub enum Commands {
         /// Hosts to build - default is all
         #[arg(long)]
         host: Vec<String>,
+        /// Which hosts should be built? Defaults to current ARCH
+        #[arg(
+            long,
+            default_value_t = std::env::consts::ARCH == "aarch64",
+            default_missing_value = (std::env::consts::ARCH == "aarch64").to_string(),
+            num_args = 0..=1,
+            require_equals = false)]
+        darwin: bool,
     },
 
     /// Query the status of all or some (TODO) hosts [requires Admin credentials]

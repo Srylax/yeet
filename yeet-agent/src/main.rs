@@ -35,14 +35,10 @@ async fn main() -> anyhow::Result<()> {
         .merge(Env::prefixed("YEET_"))
         .extract()?;
     match args.command {
-        Commands::Build { path, host } => {
+        Commands::Build { path, host, darwin } => {
             info!(
                 "{:?}",
-                nix::build_hosts(
-                    &path.to_string_lossy(),
-                    host,
-                    std::env::consts::ARCH == "aarch64"
-                )?
+                nix::build_hosts(&path.to_string_lossy(), host, darwin)?
             );
         }
         Commands::VM { host, path } => run_vm(&path, &host)?,
@@ -52,12 +48,8 @@ async fn main() -> anyhow::Result<()> {
         Commands::Status => {
             info!("{}", status_string(&config.url, &config.httpsig_key).await?);
         }
-        Commands::Publish { path, host } => {
-            let hosts = nix::build_hosts(
-                &path.to_string_lossy(),
-                host,
-                std::env::consts::ARCH == "aarch64",
-            )?;
+        Commands::Publish { path, host, darwin } => {
+            let hosts = nix::build_hosts(&path.to_string_lossy(), host, darwin)?;
 
             if hosts.is_empty() {
                 bail!("No hosts found - did you commit your files?")
