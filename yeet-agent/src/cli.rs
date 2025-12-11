@@ -29,17 +29,12 @@ pub struct ClapConfig {
     #[arg(long, global = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cachix: Option<String>,
-
-    /// Collect facter with nixos-facter
-    #[arg(long, global = true)]
-    pub collect_facter: bool,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub url: Url,
     pub httpsig_key: PathBuf,
-    pub collect_facter: bool,
     pub cachix: Option<String>,
 }
 
@@ -51,6 +46,10 @@ pub enum Commands {
         /// Lower bound, may be higher between switching versions
         #[arg(short, long, default_value = "30")]
         sleep: u64,
+
+        /// Collect facter with nixos-facter
+        #[arg(long)]
+        facter: bool,
     },
     /// Build and then publish some or all hosts in a flake
     Publish {

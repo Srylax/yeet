@@ -46,8 +46,8 @@ async fn main() -> anyhow::Result<()> {
             );
         }
         Commands::VM { host, path } => run_vm(&path, &host)?,
-        Commands::Agent { sleep } => {
-            agent::agent(&config, sleep).await?;
+        Commands::Agent { sleep, facter } => {
+            agent::agent(&config, sleep, facter).await?;
         }
         Commands::Status => {
             info!("{}", status_string(&config.url, &config.httpsig_key).await?);

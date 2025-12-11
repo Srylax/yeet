@@ -25,6 +25,12 @@ in
       description = "Seconds to wait between updates";
     };
 
+    facter = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Collect information about the system with `nixos-facter`";
+    };
+
     package = mkPackageOption pkgs "yeet" { };
   };
 
@@ -47,7 +53,7 @@ in
         Restart = "always";
         RestartSec = 5;
         ExecStart = ''
-          ${lib.getExe cfg.package} agent --sleep ${toString cfg.sleep} --url ${cfg.url}
+          ${lib.getExe cfg.package} agent --sleep ${toString cfg.sleep} --url ${cfg.url} ${lib.optionalString cfg.facter "--facter"}
         '';
       };
     };

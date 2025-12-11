@@ -28,11 +28,11 @@ static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 ///         create a new verification request
 ///         pull the verify endpoint in a time intervall
 /// 2. Continuosly pull the system endpoint and execute based on the provided
-pub async fn agent(config: &Config, sleep: u64) -> anyhow::Result<()> {
+pub async fn agent(config: &Config, sleep: u64, facter: bool) -> anyhow::Result<()> {
     let key = get_secret_key(&config.httpsig_key)?;
     let pub_key = get_verify_key(&config.httpsig_key)?;
 
-    (|| async { agent_loop(config, &key, pub_key, sleep).await })
+    (|| async { agent_loop(config, &key, pub_key, sleep, facter).await })
         .retry(
             ConstantBuilder::new()
                 .without_max_times()
@@ -51,6 +51,7 @@ async fn agent_loop(
     key: &SecretKey,
     pub_key: VerifyingKey,
     sleep: u64,
+    facter: bool,
 ) -> anyhow::Result<()> {
     let verified = server::is_host_verified(&config.url, key)
         .await?
@@ -61,7 +62,7 @@ async fn agent_loop(
             bail!("Verification requested but not yet approved. Code: {code}");
         }
 
-        let nixos_facter = if config.collect_facter {
+        let nixos_facter = if facter {
             info!("Collecting nixos-facter information");
             Some(nix::facter()?)
         } else {
