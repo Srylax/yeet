@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fs::{read_to_string, remove_file},
     io,
     path::Path,
     process::{Command, Stdio},
@@ -69,6 +70,19 @@ pub fn build_hosts(
         closures.insert(host.clone(), closure.to_owned());
     }
     Ok(closures)
+}
+
+pub fn facter() -> anyhow::Result<String> {
+    let exit = Command::new("nixos-facter")
+        .args(["-o", "facter.json"])
+        .spawn()?
+        .wait()?;
+    if !exit.success() {
+        bail!("nixos-facter did not exist successfully")
+    }
+    let facter = read_to_string("facter.json")?;
+    remove_file("facter.json")?;
+    Ok(facter)
 }
 
 pub fn list_hosts(flake_path: &str, darwin: bool) -> anyhow::Result<Vec<String>> {

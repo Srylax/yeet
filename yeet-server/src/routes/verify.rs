@@ -36,9 +36,8 @@ pub async fn verify_attempt(
     State(state): State<Arc<RwLock<AppState>>>,
     HttpSig(key): HttpSig,
     VerifiedJson(acceptance): VerifiedJson<api::VerificationAcceptance>,
-) -> Result<StatusCode, StateError> {
+) -> Result<Json<api::VerificationArtifacts>, StateError> {
     let mut state = state.write_arc();
     state.auth_admin(&key)?;
-    state.verify_attempt(acceptance)?;
-    Ok(StatusCode::OK)
+    Ok(Json(state.verify_attempt(acceptance)?))
 }

@@ -1,10 +1,8 @@
-use anyhow::{Ok, anyhow};
+use anyhow::Ok;
 use api::key::{get_secret_key, get_verify_key};
 use backon::{ConstantBuilder, Retryable as _};
-use ed25519_dalek::pkcs8::DecodePrivateKey;
-use ed25519_dalek::{SigningKey, VerifyingKey};
-use httpsig_hyper::prelude::{AlgorithmName, SecretKey};
-use std::fs::read_to_string;
+use ed25519_dalek::VerifyingKey;
+use httpsig_hyper::prelude::SecretKey;
 use std::io::{BufRead as _, BufReader};
 use std::path::Path;
 use std::sync::OnceLock;
@@ -14,12 +12,11 @@ use std::{
     process::Command,
 };
 use tokio::time;
-use yeet::server;
+use yeet::{nix, server};
 
 use anyhow::bail;
 use log::{error, info};
 use notify_rust::Notification;
-use ssh_key::PrivateKey;
 
 use crate::cli::Config;
 
@@ -63,11 +60,20 @@ async fn agent_loop(
         if let Some(code) = VERIFICATION_CODE.get() {
             bail!("Verification requested but not yet approved. Code: {code}");
         }
+
+        let nixos_facter = if config.collect_facter {
+            info!("Collecting nixos-facter information");
+            Some(nix::facter()?)
+        } else {
+            None
+        };
+
         let code = server::add_verification_attempt(
             &config.url,
             &api::VerificationAttempt {
                 key: pub_key,
                 store_path: get_active_version()?,
+                artifacts: api::VerificationArtifacts { nixos_facter },
             },
         )
         .await?;
@@ -187,7 +193,7 @@ fn activate(version: &api::RemoteStorePath) -> anyhow::Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn activate(version: &api::RemoteStorePath) -> Result<()> {
+fn activate(version: &api::RemoteStorePath) -> anyhow::Result<()> {
     info!("Activating {}", version.store_path);
     set_system_profile(version)?;
     Command::new(Path::new(&version.store_path).join("bin/switch-to-configuration"))

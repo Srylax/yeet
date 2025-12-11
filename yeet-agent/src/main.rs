@@ -32,7 +32,6 @@ async fn main() -> anyhow::Result<()> {
             xdg_dirs.find_config_file("agent.toml").unwrap_or_default(),
         ))
         .merge(Serialized::defaults(args.config))
-        .merge(Toml::file(".config/yeet.toml"))
         .merge(Env::prefixed("YEET_"))
         .extract()?;
     match args.command {

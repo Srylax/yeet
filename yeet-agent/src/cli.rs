@@ -20,7 +20,7 @@ pub struct ClapConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<Url>,
 
-    /// Path to the admin key
+    /// Path to ed25519 key which is used for authentication
     #[arg(long, global = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub httpsig_key: Option<PathBuf>, // TODO: create a key selector
@@ -29,12 +29,17 @@ pub struct ClapConfig {
     #[arg(long, global = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cachix: Option<String>,
+
+    /// Collect facter with nixos-facter
+    #[arg(long, global = true)]
+    pub collect_facter: bool,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub url: Url,
     pub httpsig_key: PathBuf,
+    pub collect_facter: bool,
     pub cachix: Option<String>,
 }
 
@@ -137,6 +142,9 @@ pub enum ServerCommands {
         /// The public key the of the verification attempt
         #[arg(long)]
         public_key: PathBuf,
+        /// Facter input file
+        #[arg(long)]
+        facter: Option<PathBuf>,
     },
     /// Approve a pending key verification with the corresponding code
     VerifyAttempt {
@@ -146,6 +154,9 @@ pub enum ServerCommands {
         /// Verification code
         #[arg(index = 2)]
         code: u32,
+        /// Facter output file
+        #[arg(long)]
+        facter: PathBuf,
     },
     /// Add a new admin or build key to the server
     AddKey {

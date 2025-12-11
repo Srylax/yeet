@@ -1,9 +1,8 @@
-use api::Host;
 use axum::http::StatusCode;
 use axum_thiserror::ErrorStatus;
 use httpsig_hyper::prelude::{AlgorithmName, PublicKey, VerifyingKey as _};
 use jiff::{ToSpan as _, Zoned};
-use rand::{Rng, RngCore as _};
+use rand::Rng;
 use serde_json_any_key::any_key_map;
 use std::{
     cmp::Ordering,
@@ -90,12 +89,15 @@ impl AppState {
         });
     }
 
+    /// Agent want to authenticate so he sends a request
+    /// This can be approved by an admin with `verify_attempt`
     pub fn add_verification_attempt(&mut self, attempt: api::VerificationAttempt) -> Result<u32> {
         self.drain_verification_attempts();
         if self.verification_attempt.len() >= 10 {
             return Err(StateError::TooManyVerificationAttempts);
         }
 
+        // check if key already exists
         if self
             .verification_attempt
             .values()
@@ -104,10 +106,12 @@ impl AppState {
             return Err(StateError::KeyPendingVerification);
         }
 
+        // check if key already is in registered keys
         if self.keyids.values().any(|key| key == &attempt.key) {
             return Err(StateError::KeyAlreadyInUse);
         }
 
+        // attempt is safe to add -> create a random number
         let verification = rand::rng().random_range(100_000..=999_999);
 
         self.verification_attempt
@@ -116,18 +120,24 @@ impl AppState {
         Ok(verification)
     }
 
-    pub fn verify_attempt(&mut self, acceptance: api::VerificationAcceptance) -> Result<()> {
+    /// Verify an existing verification attempt
+    /// Host needs to be pre-register
+    pub fn verify_attempt(
+        &mut self,
+        acceptance: api::VerificationAcceptance,
+    ) -> Result<api::VerificationArtifacts> {
         self.drain_verification_attempts();
 
+        // check if the host is registered before we remove the verification attempt
+        // else we would remove it and wont have an attemp if the host is not registered
         if !self.pre_register_host.contains_key(&acceptance.host_name) {
             return Err(StateError::PreRegisterNotFound(acceptance.host_name));
         }
 
-        if !self.verification_attempt.contains_key(&acceptance.code) {
-            return Err(StateError::AttemptNotFound(acceptance.code));
-        }
-
-        let (attempt, first_ping) = self.verification_attempt.remove(&acceptance.code).unwrap();
+        let (attempt, first_ping) = self
+            .verification_attempt
+            .remove(&acceptance.code)
+            .ok_or(StateError::AttemptNotFound(acceptance.code))?;
 
         let state = self
             .pre_register_host
@@ -149,7 +159,7 @@ impl AppState {
             },
         );
         self.keyids.insert(signing_key.key_id(), attempt.key);
-        Ok(())
+        Ok(attempt.artifacts)
     }
 
     /// This is the "ping" command every client should send in a specific interval.
