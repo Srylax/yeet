@@ -31,6 +31,12 @@ in
       description = "Collect information about the system with `nixos-facter`";
     };
 
+    httpsigKey = mkOption {
+      type = types.str;
+      default = "/etc/ssh/ssh_host_ed25519_key";
+      description = "ED25519 key used as the hosts identity";
+    };
+
     package = mkPackageOption pkgs "yeet" { };
   };
 
@@ -53,7 +59,7 @@ in
         Restart = "always";
         RestartSec = 5;
         ExecStart = ''
-          ${lib.getExe cfg.package} agent --sleep ${toString cfg.sleep} --url ${cfg.url} ${lib.optionalString cfg.facter "--facter"}
+          ${lib.getExe cfg.package} agent --sleep ${toString cfg.sleep} --url ${cfg.url} --httpsig-key ${cfg.httpsigKey} ${lib.optionalString cfg.facter "--facter"}
         '';
       };
     };
