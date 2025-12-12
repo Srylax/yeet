@@ -29,12 +29,12 @@ rustPlatform.buildRustPackage {
   ];
 
   postInstall = ''
-    wrapProgram $out/bin/yeet --prefix PATH : $ {
-        lib.makeBinPath [
-            pkgs.nixos-facter
-            pkgs.cachix
-            pkgs.nix
-        ]
+    wrapProgram $out/bin/yeet --prefix PATH : ${
+      lib.makeBinPath [
+        pkgs.nixos-facter
+        pkgs.cachix
+        pkgs.nix
+      ]
     }
   '';
 
