@@ -28,7 +28,7 @@ rustPlatform.buildRustPackage {
     pkgs.dbus
   ];
 
-  postBuild = ''
+  postInstall = ''
     wrapProgram $out/bin/yeet --prefix PATH : $ {
         lib.makeBinPath [
             pkgs.nixos-facter
