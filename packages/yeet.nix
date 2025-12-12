@@ -1,23 +1,49 @@
-{ pkgs, ... }:
+{
+  pkgs,
+  rustPlatform ? pkgs.rustPlatform,
+  lib ? pkgs.lib,
+  stdenv ? pkgs.stdenv,
+  ...
+}:
 let
-  manifest = (pkgs.lib.importTOML ../yeet-agent/Cargo.toml).package;
+  manifest = (lib.importTOML ../yeet-agent/Cargo.toml).package;
 in
-pkgs.rustPlatform.buildRustPackage {
+rustPlatform.buildRustPackage {
   pname = manifest.name;
   version = manifest.version;
   cargoLock.lockFile = ../Cargo.lock;
   src = ../.;
   buildAndTestSubdir = "yeet-agent";
-  nativeBuildInputs = with pkgs; [
-    pkg-config
+  nativeBuildInputs = [
+    pkgs.pkg-config
+    pkgs.makeWrapper
   ];
   buildInputs = [
     pkgs.openssl
   ]
-  ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+  ++ lib.optionals stdenv.isDarwin [
     pkgs.apple-sdk
   ]
-  ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+  ++ lib.optionals stdenv.isLinux [
     pkgs.dbus
   ];
+
+  postBuild = ''
+    wrapProgram $out/bin/yeet --prefix PATH : $ {
+        lib.makeBinPath [
+            pkgs.nixos-facter
+            pkgs.cachix
+            pkgs.nix
+        ]
+    }
+  '';
+
+  meta = {
+    description = "A pull-based nix deployment tool";
+    homepage = "https://github.com/srylaz/yeet";
+    platforms = lib.platforms.all;
+    license = lib.licenses.agpl3Plus;
+    mainProgram = "yeet";
+    maintainers = with lib.maintainers; [ Srylax ];
+  };
 }
