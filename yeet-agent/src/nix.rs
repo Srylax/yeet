@@ -17,12 +17,11 @@ pub fn run_vm(flake_path: &Path, system: &str) -> Result<(), Report> {
     let flake_path = flake_path.canonicalize()?; // Maybe check if its a dir and if it contains a flake.nix
     let flake_path = flake_path.to_string_lossy();
     #[cfg(target_arch = "x86_64")]
-    let flake_target = format!("{flake_path}#nixosConfigurations.{system}.config.formats.vm",);
+    let flake_target = format!("nixosConfigurations.{system}.config.formats.vm",);
     #[cfg(target_arch = "aarch64")]
-    let flake_target = format!("{flake_path}#darwinConfigurations.{system}.config.formats.vm",);
+    let flake_target = format!("darwinConfigurations.{system}.config.formats.vm",);
     let build_output = Command::new("nix")
-        .arg("build")
-        .arg(flake_target)
+        .args(["build", "-f", &flake_path, &flake_target])
         .stderr(io::stderr())
         .stdout(io::stdout())
         .spawn()?
@@ -53,13 +52,12 @@ pub fn build_hosts(
     let mut closures = HashMap::with_capacity(found_hosts.len());
     for ref host in found_hosts {
         let system = if darwin {
-            format!("{flake_path}#darwinConfigurations.{host}.system")
+            format!("darwinConfigurations.{host}.system")
         } else {
-            format!("{flake_path}#nixosConfigurations.{host}.config.system.build.toplevel")
+            format!("nixosConfigurations.{host}.config.system.build.toplevel")
         };
         let output = Command::new("nix")
-            .args(["build", "--json", "--no-link", "--"])
-            .arg(&system)
+            .args(["build", "--json", "--no-link", "-f", flake_path, &system])
             .stdout(Stdio::piped())
             .spawn()?
             .wait_with_output()?;
@@ -96,8 +94,14 @@ pub fn list_hosts(flake_path: &str, darwin: bool) -> Result<Vec<String>, Report>
     };
     let output = Command::new("nix")
         .arg("eval")
-        .arg(format!("{flake_path}#{flavor}",))
-        .args(["--apply", "builtins.attrNames", "--json"])
+        .args([
+            "-f",
+            flake_path,
+            flavor,
+            "--apply",
+            "builtins.attrNames",
+            "--json",
+        ])
         .stdout(Stdio::piped())
         .spawn()?
         .wait_with_output()?;

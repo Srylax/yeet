@@ -29,6 +29,11 @@ pub struct ClapConfig {
     #[arg(long, global = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cachix: Option<String>,
+
+    /// Cachix signing key
+    #[arg(long, global = true)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cachix_key: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -36,6 +41,7 @@ pub struct Config {
     pub url: Url,
     pub httpsig_key: PathBuf,
     pub cachix: Option<String>,
+    pub cachix_key: Option<String>,
 }
 
 #[expect(clippy::doc_markdown, reason = "No Markdown for clap")]

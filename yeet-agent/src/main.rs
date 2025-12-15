@@ -11,6 +11,7 @@ use rootcause::hooks::Hooks;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, bail, report};
 use url::Url;
+use yeet::cachix::CachixInfo;
 use yeet::display::diff_inline;
 use yeet::nix::{self, run_vm};
 use yeet::{cachix, display, server};
@@ -60,25 +61,34 @@ async fn main() -> Result<(), Report> {
             );
         }
         Commands::Publish { path, host, darwin } => {
+            let cachix = config.cachix.clone().ok_or(report!(
+                "Cachix cache name required. Set it in config or via the --cachix flag"
+            ))?;
+
+            let public_key = if let Some(key) = &config.cachix_key {
+                key.clone()
+            } else {
+                let cache_info = cachix::get_cachix_info(&cachix).await.context(
+                    "Could not get cache information. For private caches use `--cachix-key`",
+                )?;
+                cache_info
+                    .public_signing_keys
+                    .first()
+                    .cloned()
+                    .ok_or(report!("Cachix cache has no public signing keys"))?
+            };
+
+            info!("Building {host:?}");
+
             let hosts = nix::build_hosts(&path.to_string_lossy(), host, darwin)?;
 
             if hosts.is_empty() {
                 bail!("No hosts found - did you commit your files?")
             }
 
-            let cache_info = cachix::get_cachix_info(config.cachix.clone().ok_or(report!(
-                "Cachix cache name required. Set it in config or via the --cachix flag"
-            ))?)
-            .await?;
+            info!("Pushing {hosts:?}");
 
-            let public_key = cache_info
-                .public_signing_keys
-                .first()
-                .cloned()
-                .ok_or(report!("Cachix cache has no public signing keys"))?;
-
-            info!("{hosts:?}");
-            cachix::push_paths(hosts.values(), cache_info.name).await?;
+            cachix::push_paths(hosts.values(), &cachix).await?;
 
             let before = status_string(&config.url, &config.httpsig_key).await?;
             server::update(
@@ -87,7 +97,7 @@ async fn main() -> Result<(), Report> {
                 &api::HostUpdateRequest {
                     hosts,
                     public_key,
-                    substitutor: cache_info.uri,
+                    substitutor: format!("https://{cachix}.cachix.org"),
                 },
             )
             .await?;
