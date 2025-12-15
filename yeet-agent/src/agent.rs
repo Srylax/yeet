@@ -1,8 +1,9 @@
-use anyhow::{Context, Ok};
 use api::key::{get_secret_key, get_verify_key};
 use backon::{ConstantBuilder, Retryable as _};
 use ed25519_dalek::VerifyingKey;
 use httpsig_hyper::prelude::SecretKey;
+use rootcause::prelude::ResultExt as _;
+use rootcause::{Report, bail};
 use std::io::{BufRead as _, BufReader};
 use std::path::Path;
 use std::sync::OnceLock;
@@ -14,7 +15,6 @@ use std::{
 use tokio::time;
 use yeet::{nix, server};
 
-use anyhow::bail;
 use log::{error, info};
 use notify_rust::Notification;
 
@@ -28,7 +28,7 @@ static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 ///         create a new verification request
 ///         pull the verify endpoint in a time intervall
 /// 2. Continuosly pull the system endpoint and execute based on the provided
-pub async fn agent(config: &Config, sleep: u64, facter: bool) -> anyhow::Result<()> {
+pub async fn agent(config: &Config, sleep: u64, facter: bool) -> Result<(), Report> {
     let key = get_secret_key(&config.httpsig_key)?;
     let pub_key = get_verify_key(&config.httpsig_key)?;
 
@@ -38,8 +38,8 @@ pub async fn agent(config: &Config, sleep: u64, facter: bool) -> anyhow::Result<
                 .without_max_times()
                 .with_delay(Duration::from_secs(sleep)),
         )
-        .notify(|err: &anyhow::Error, dur: Duration| {
-            error!("{err:?} - retrying in {dur:?}");
+        .notify(|err: &Report, dur: Duration| {
+            error!("{err} - retrying in {dur:?}");
         })
         .await?;
 
@@ -52,7 +52,7 @@ async fn agent_loop(
     pub_key: VerifyingKey,
     sleep: u64,
     facter: bool,
-) -> anyhow::Result<()> {
+) -> Result<(), Report> {
     let verified = server::is_host_verified(&config.url, key)
         .await?
         .is_success();
@@ -103,7 +103,7 @@ async fn agent_loop(
     }
 }
 
-fn agent_action(action: api::AgentAction) -> anyhow::Result<()> {
+fn agent_action(action: api::AgentAction) -> Result<(), Report> {
     match action {
         api::AgentAction::Nothing => {}
         api::AgentAction::Detach => {}
@@ -112,14 +112,14 @@ fn agent_action(action: api::AgentAction) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_active_version() -> anyhow::Result<String> {
+fn get_active_version() -> Result<String, Report> {
     Ok(read_link("/run/current-system")
         .context("Current system has no `/run/current-system`")?
         .to_string_lossy()
         .to_string())
 }
 
-fn trusted_public_keys() -> anyhow::Result<Vec<String>> {
+fn trusted_public_keys() -> Result<Vec<String>, Report> {
     let file = File::open("/etc/nix/nix.conf")?;
     Ok(BufReader::new(file)
         .lines()
@@ -134,7 +134,7 @@ fn trusted_public_keys() -> anyhow::Result<Vec<String>> {
         .collect())
 }
 
-fn update(version: &api::RemoteStorePath) -> anyhow::Result<()> {
+fn update(version: &api::RemoteStorePath) -> Result<(), Report> {
     download(version)?;
     activate(version)?;
     Notification::new()
@@ -145,7 +145,7 @@ fn update(version: &api::RemoteStorePath) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn download(version: &api::RemoteStorePath) -> anyhow::Result<()> {
+fn download(version: &api::RemoteStorePath) -> Result<(), Report> {
     info!("Downloading {}", version.store_path);
     let mut keys = trusted_public_keys()?;
     keys.push(version.public_key.clone());
@@ -170,7 +170,7 @@ fn download(version: &api::RemoteStorePath) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn set_system_profile(version: &api::RemoteStorePath) -> anyhow::Result<()> {
+fn set_system_profile(version: &api::RemoteStorePath) -> Result<(), Report> {
     info!("Setting system profile to {}", version.store_path);
     let profile = Command::new("nix-env")
         .args([
@@ -187,7 +187,7 @@ fn set_system_profile(version: &api::RemoteStorePath) -> anyhow::Result<()> {
 }
 
 #[cfg(target_os = "macos")]
-fn activate(version: &api::RemoteStorePath) -> anyhow::Result<()> {
+fn activate(version: &api::RemoteStorePath) -> Result<(), Report> {
     set_system_profile(version)?;
     info!("Activating {}", version.store_path);
     Command::new(Path::new(&version.store_path).join("activate"))
@@ -197,7 +197,7 @@ fn activate(version: &api::RemoteStorePath) -> anyhow::Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn activate(version: &api::RemoteStorePath) -> anyhow::Result<()> {
+fn activate(version: &api::RemoteStorePath) -> Result<(), Report> {
     info!("Activating {}", version.store_path);
     set_system_profile(version)?;
     Command::new(Path::new(&version.store_path).join("bin/switch-to-configuration"))

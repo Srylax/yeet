@@ -1,7 +1,11 @@
 use api::httpsig::ReqwestSig as _;
 use http::StatusCode;
 use httpsig_hyper::prelude::*;
+use rootcause::{
+    IntoReport, Report, compat::boxed_error::IntoBoxedError, prelude::ResultExt, report,
+};
 use serde::de::DeserializeOwned;
+use std::error::Error;
 use std::sync::LazyLock;
 use url::Url;
 
@@ -16,7 +20,7 @@ static COMPONENTS: LazyLock<Vec<message_component::HttpMessageComponentId>> = La
         .expect("Could not create HTTP Signature components")
 });
 
-pub async fn status<K: SigningKey + Sync>(url: &Url, key: &K) -> anyhow::Result<Vec<api::Host>> {
+pub async fn status<K: SigningKey + Sync>(url: &Url, key: &K) -> Result<Vec<api::Host>, Report> {
     Client::new()
         .get(url.join("/status")?)
         .sign(&sig_param(key)?, key)
@@ -31,7 +35,7 @@ pub async fn register<K: SigningKey + Sync>(
     url: &Url,
     key: &K,
     register_host: &api::RegisterHost,
-) -> anyhow::Result<StatusCode> {
+) -> Result<StatusCode, Report> {
     Client::new()
         .post(url.join("/system/register")?)
         .json(register_host)
@@ -47,7 +51,7 @@ pub async fn update<K: SigningKey + Sync>(
     url: &Url,
     key: &K,
     host_update_request: &api::HostUpdateRequest,
-) -> anyhow::Result<StatusCode> {
+) -> Result<StatusCode, Report> {
     Client::new()
         .post(url.join("/system/update")?)
         .json(host_update_request)
@@ -62,7 +66,7 @@ pub async fn update<K: SigningKey + Sync>(
 pub async fn is_host_verified<K: SigningKey + Sync>(
     url: &Url,
     key: &K,
-) -> anyhow::Result<StatusCode> {
+) -> Result<StatusCode, Report> {
     Ok(Client::new()
         .get(url.join("/system/verify")?)
         .sign(&sig_param(key)?, key)
@@ -75,7 +79,7 @@ pub async fn is_host_verified<K: SigningKey + Sync>(
 pub async fn add_verification_attempt(
     url: &Url,
     attempt: &api::VerificationAttempt,
-) -> anyhow::Result<u32> {
+) -> Result<u32, Report> {
     Client::new()
         .post(url.join("/system/verify")?)
         .json(attempt)
@@ -89,7 +93,7 @@ pub async fn verify_attempt<K: SigningKey + Sync>(
     url: &Url,
     key: &K,
     acceptance: &api::VerificationAcceptance,
-) -> anyhow::Result<api::VerificationArtifacts> {
+) -> Result<api::VerificationArtifacts, Report> {
     Client::new()
         .post(url.join("/system/verify/accept")?)
         .json(acceptance)
@@ -105,7 +109,7 @@ pub async fn system_check<K: SigningKey + Sync>(
     url: &Url,
     key: &K,
     version: &api::VersionRequest,
-) -> anyhow::Result<api::AgentAction> {
+) -> Result<api::AgentAction, Report> {
     Client::new()
         .post(url.join("/system/check")?)
         .json(version)
@@ -121,7 +125,7 @@ pub async fn add_key<K: SigningKey + Sync>(
     url: &Url,
     key: &K,
     add_key: &api::AddKey,
-) -> anyhow::Result<StatusCode> {
+) -> Result<StatusCode, Report> {
     Client::new()
         .post(url.join("/key/add")?)
         .json(add_key)
@@ -137,7 +141,7 @@ pub async fn remove_key<K: SigningKey + Sync>(
     url: &Url,
     key: &K,
     remove_key: &ed25519_dalek::VerifyingKey,
-) -> anyhow::Result<StatusCode> {
+) -> Result<StatusCode, Report> {
     Client::new()
         .post(url.join("/key/remove")?)
         .json(remove_key)
@@ -149,31 +153,31 @@ pub async fn remove_key<K: SigningKey + Sync>(
         .await
 }
 
-fn sig_param<K: SigningKey + Sync>(key: &K) -> anyhow::Result<HttpSignatureParams> {
+fn sig_param<K: SigningKey + Sync>(key: &K) -> Result<HttpSignatureParams, Report> {
     let mut signature_params = HttpSignatureParams::try_new(&COMPONENTS)?;
     signature_params.set_key_info(key);
     Ok(signature_params)
 }
 
 pub trait ErrorForJson {
-    async fn error_for_json<T: DeserializeOwned>(self) -> anyhow::Result<T>;
-    async fn error_for_code(self) -> anyhow::Result<StatusCode>;
+    async fn error_for_json<T: DeserializeOwned>(self) -> Result<T, Report>;
+    async fn error_for_code(self) -> Result<StatusCode, Report>;
 }
 
 impl ErrorForJson for Response {
-    async fn error_for_json<T: DeserializeOwned>(self) -> anyhow::Result<T> {
+    async fn error_for_json<T: DeserializeOwned>(self) -> Result<T, Report> {
         if self.status().is_success() {
             Ok(self.json::<T>().await?)
         } else {
-            Err(anyhow::anyhow!("{}: {}", self.status(), self.text().await?))
+            Err(report!("{}: {}", self.status(), self.text().await?))
         }
     }
 
-    async fn error_for_code(self) -> anyhow::Result<StatusCode> {
+    async fn error_for_code(self) -> Result<StatusCode, Report> {
         if self.status().is_success() {
             Ok(self.status())
         } else {
-            Err(anyhow::anyhow!("{}: {}", self.status(), self.text().await?))
+            Err(report!("{}: {}", self.status(), self.text().await?))
         }
     }
 }

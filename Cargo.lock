@@ -2646,6 +2646,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "rootcause"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19b2fa24b30d915f807d1a14eb9eb0947fad76d6e63f165f3969e61a2942a928"
+dependencies = [
+ "hashbrown",
+ "indexmap",
+ "rootcause-internals",
+ "rustc-hash",
+ "triomphe",
+]
+
+[[package]]
+name = "rootcause-internals"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15e09e790e6a1ade68d035e081be5054b03b9329a7b568ea5707c4395053b778"
+dependencies = [
+ "triomphe",
+]
+
+[[package]]
 name = "rsa"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3466,6 +3488,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "triomphe"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd69c5aa8f924c7519d6372789a74eac5b94fb0f8fcf0d4a97eb0bfc3e785f39"
+
+[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4112,7 +4140,6 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 name = "yeet"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "backon",
  "clap",
  "console",
@@ -4125,6 +4152,7 @@ dependencies = [
  "log",
  "notify-rust",
  "reqwest",
+ "rootcause",
  "serde",
  "serde_json",
  "similar",

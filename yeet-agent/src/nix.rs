@@ -6,14 +6,14 @@ use std::{
     process::{Command, Stdio},
 };
 
-use anyhow::{Context, Ok, anyhow, bail};
+use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use serde_json::Value;
 
 // This command is used to run the virtual machine of a particular system
 // WARNING: currently is just shelling out. In future we need to valide if
 // the system is in the flake or not
 // TODO: split build and run into different parts
-pub fn run_vm(flake_path: &Path, system: &str) -> anyhow::Result<()> {
+pub fn run_vm(flake_path: &Path, system: &str) -> Result<(), Report> {
     let flake_path = flake_path.canonicalize()?; // Maybe check if its a dir and if it contains a flake.nix
     let flake_path = flake_path.to_string_lossy();
     #[cfg(target_arch = "x86_64")]
@@ -44,7 +44,7 @@ pub fn build_hosts(
     flake_path: &str,
     hosts: Vec<String>,
     darwin: bool,
-) -> anyhow::Result<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, Report> {
     let mut found_hosts = list_hosts(flake_path, darwin)?;
     // If empty build all
     if !hosts.is_empty() {
@@ -66,13 +66,13 @@ pub fn build_hosts(
         let build = serde_json::from_slice::<Value>(&output.stdout)?;
         let closure = build[0]["outputs"]["out"]
             .as_str()
-            .ok_or(anyhow!("Build output did not contain a valid closure"))?;
+            .ok_or(report!("Build output did not contain a valid closure"))?;
         closures.insert(host.clone(), closure.to_owned());
     }
     Ok(closures)
 }
 
-pub fn facter() -> anyhow::Result<String> {
+pub fn facter() -> Result<String, Report> {
     let exit = Command::new("nixos-facter")
         .args(["-o", "facter.json"])
         .spawn()
@@ -88,7 +88,7 @@ pub fn facter() -> anyhow::Result<String> {
     Ok(facter)
 }
 
-pub fn list_hosts(flake_path: &str, darwin: bool) -> anyhow::Result<Vec<String>> {
+pub fn list_hosts(flake_path: &str, darwin: bool) -> Result<Vec<String>, Report> {
     let flavor = if darwin {
         "darwinConfigurations"
     } else {

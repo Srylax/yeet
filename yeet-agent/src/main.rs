@@ -2,13 +2,14 @@
 
 use std::path::Path;
 
-use anyhow::anyhow;
-use anyhow::{Ok, Result, bail};
 use api::key::get_secret_key;
 use clap::Parser as _;
 use figment::Figment;
 use figment::providers::{Env, Format as _, Serialized, Toml};
 use log::info;
+use rootcause::hooks::Hooks;
+use rootcause::prelude::ResultExt;
+use rootcause::{Report, bail, report};
 use url::Url;
 use yeet::display::diff_inline;
 use yeet::nix::{self, run_vm};
@@ -23,7 +24,12 @@ mod server_cli;
 #[tokio::main]
 #[expect(clippy::too_many_lines)]
 #[expect(clippy::unwrap_in_result)]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<(), Report> {
+    Hooks::new()
+        .report_formatter(rootcause::hooks::builtin_hooks::report_formatter::DefaultReportFormatter::UNICODE_COLORS)
+        .install()
+        .expect("failed to install hooks");
+
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let xdg_dirs = xdg::BaseDirectories::with_prefix("yeet");
     let args = Yeet::try_parse()?;
@@ -46,7 +52,12 @@ async fn main() -> anyhow::Result<()> {
             agent::agent(&config, sleep, facter).await?;
         }
         Commands::Status => {
-            info!("{}", status_string(&config.url, &config.httpsig_key).await?);
+            info!(
+                "{}",
+                status_string(&config.url, &config.httpsig_key)
+                    .await
+                    .context("Failed to get status")?
+            );
         }
         Commands::Publish { path, host, darwin } => {
             let hosts = nix::build_hosts(&path.to_string_lossy(), host, darwin)?;
@@ -55,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
                 bail!("No hosts found - did you commit your files?")
             }
 
-            let cache_info = cachix::get_cachix_info(config.cachix.clone().ok_or(anyhow!(
+            let cache_info = cachix::get_cachix_info(config.cachix.clone().ok_or(report!(
                 "Cachix cache name required. Set it in config or via the --cachix flag"
             ))?)
             .await?;
@@ -64,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
                 .public_signing_keys
                 .first()
                 .cloned()
-                .ok_or(anyhow!("Cachix cache has no public signing keys"))?;
+                .ok_or(report!("Cachix cache has no public signing keys"))?;
 
             info!("{hosts:?}");
             cachix::push_paths(hosts.values(), cache_info.name).await?;
@@ -88,12 +99,12 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub(crate) async fn status_string(url: &Url, httpsig_key: &Path) -> anyhow::Result<String> {
+pub(crate) async fn status_string(url: &Url, httpsig_key: &Path) -> Result<String, Report> {
     let status = server::status(url, &get_secret_key(httpsig_key)?).await?;
     let rows = status
         .into_iter()
         .map(|host| display::host(&host))
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>, Report>>()?;
 
     Ok(rows.join("\n"))
 }

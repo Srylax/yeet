@@ -8,8 +8,6 @@ use httpsig_hyper::prelude::{AlgorithmName, SecretKey};
 use ssh_key::{PrivateKey, PublicKey};
 use thiserror::Error;
 
-use crate::httpsig;
-
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum KeyError {

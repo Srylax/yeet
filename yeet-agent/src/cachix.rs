@@ -1,7 +1,7 @@
 use std::ffi::OsStr;
 
-use anyhow::{Ok, bail};
 use reqwest::Client;
+use rootcause::{Report, bail};
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use url::Url;
@@ -21,7 +21,7 @@ pub struct CachixInfo {
     pub uri: String,
 }
 
-pub async fn get_cachix_info<S: AsRef<str>>(cache: S) -> anyhow::Result<CachixInfo> {
+pub async fn get_cachix_info<S: AsRef<str>>(cache: S) -> Result<CachixInfo, Report> {
     Client::new()
         .get(Url::parse("https://app.cachix.org/api/v1/cache/")?.join(cache.as_ref())?)
         .send()
@@ -30,7 +30,7 @@ pub async fn get_cachix_info<S: AsRef<str>>(cache: S) -> anyhow::Result<CachixIn
         .await
 }
 
-pub async fn push_paths<I, S, C>(closures: I, cache: C) -> anyhow::Result<()>
+pub async fn push_paths<I, S, C>(closures: I, cache: C) -> Result<(), Report>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,

@@ -6,6 +6,7 @@ use std::{
 
 use api::key::{get_secret_key, get_verify_key};
 use log::info;
+use rootcause::Report;
 use yeet::{display::diff_inline, server};
 
 use crate::{
@@ -16,7 +17,7 @@ use crate::{
 pub async fn handle_server_commands(
     command: ServerCommands,
     config: &Config,
-) -> anyhow::Result<()> {
+) -> Result<(), Report> {
     match command {
         ServerCommands::Register {
             store_path,

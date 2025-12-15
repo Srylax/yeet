@@ -3,6 +3,7 @@ use std::io::Write as _;
 use api::hash_hex;
 use console::style;
 use jiff::{SpanRound, Unit, Zoned};
+use rootcause::Report;
 use similar::{ChangeTag, DiffOp, TextDiff};
 
 // pub trait Fragment {
@@ -14,7 +15,7 @@ use similar::{ChangeTag, DiffOp, TextDiff};
 //     }
 // }
 
-pub fn host(host: &api::Host) -> anyhow::Result<String> {
+pub fn host(host: &api::Host) -> Result<String, Report> {
     let status = match host.provision_state {
         api::ProvisionState::NotSet => " (NotSet)",
         api::ProvisionState::Detached => " (Detached)",
