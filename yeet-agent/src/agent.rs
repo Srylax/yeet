@@ -4,7 +4,7 @@ use ed25519_dalek::VerifyingKey;
 use httpsig_hyper::prelude::SecretKey;
 use rootcause::prelude::ResultExt as _;
 use rootcause::{Report, bail};
-use std::io::{BufRead as _, BufReader};
+use std::io::{BufRead as _, BufReader, Write};
 use std::path::Path;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -12,6 +12,7 @@ use std::{
     fs::{File, read_link},
     process::Command,
 };
+use tempfile::NamedTempFile;
 use tokio::time;
 use yeet::{nix, server};
 
@@ -149,21 +150,36 @@ fn download(version: &api::RemoteStorePath) -> Result<(), Report> {
     info!("Downloading {}", version.store_path);
     let mut keys = trusted_public_keys()?;
     keys.push(version.public_key.clone());
-    let download = Command::new("nix-store")
-        .args(vec![
-            "--realise",
-            &version.store_path,
+
+    let mut command = Command::new("nix-store");
+    command.args(vec![
+        "--realise",
+        &version.store_path,
+        "--option",
+        "extra-substituters",
+        &version.substitutor,
+        "--option",
+        "trusted-public-keys",
+        &keys.join(" "),
+        "--option",
+        "narinfo-cache-negative-ttl",
+        "0",
+    ]);
+
+    if let Some(netrc) = &version.netrc {
+        let mut netrc_file = NamedTempFile::new().context("Could not create netrc temp file")?;
+        netrc_file
+            .write_all(netrc.as_bytes())
+            .context("Could not write to the temp netrc file")?;
+        netrc_file.flush()?;
+        command.args([
             "--option",
-            "extra-substituters",
-            &version.substitutor,
-            "--option",
-            "trusted-public-keys",
-            &keys.join(" "),
-            "--option",
-            "narinfo-cache-negative-ttl",
-            "0",
-        ])
-        .output()?;
+            "netrc-file",
+            &netrc_file.path().to_string_lossy(),
+        ]);
+    }
+
+    let download = command.output()?;
     if !download.status.success() {
         bail!("{}", String::from_utf8(download.stderr)?);
     }

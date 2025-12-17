@@ -62,9 +62,15 @@ pub enum Commands {
         /// Path to flake
         #[arg(long, default_value = current_dir().unwrap().into_os_string())]
         path: PathBuf,
+
         /// Hosts to build - default is all
         #[arg(long)]
         host: Vec<String>,
+
+        /// netrc File to use when downloading from the cache. Useful when using private caches
+        #[arg(long)]
+        netrc: Option<api::NETRC>,
+
         /// Which hosts should be built? Defaults to current ARCH
         #[arg(
             long,
@@ -134,6 +140,10 @@ pub enum ServerCommands {
         /// The substitutor the agent should use to fetch the update
         #[arg(long)]
         substitutor: String,
+
+        /// netrc File to use when downloading from the cache. Useful when using private caches
+        #[arg(long)]
+        netrc: Option<api::NETRC>,
     },
     /// Register a new host
     Register {
@@ -148,6 +158,10 @@ pub enum ServerCommands {
         /// The substitutor the agent should use to fetch the update
         #[arg(long)]
         substitutor: Option<String>,
+
+        /// netrc File to use when downloading from the cache. Useful when using private caches
+        #[arg(long)]
+        netrc: Option<api::NETRC>,
 
         /// Pet name for the host
         #[arg(index = 1)]

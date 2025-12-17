@@ -24,6 +24,7 @@ pub async fn handle_server_commands(
             name,
             public_key,
             substitutor,
+            netrc,
         } => {
             let before = status_string(&config.url, &config.httpsig_key).await?;
 
@@ -35,6 +36,7 @@ pub async fn handle_server_commands(
                     public_key,
                     store_path,
                     substitutor,
+                    netrc,
                 })
             } else {
                 api::ProvisionState::NotSet
@@ -57,6 +59,7 @@ pub async fn handle_server_commands(
             store_path,
             public_key,
             substitutor,
+            netrc,
         } => {
             let before = status_string(&config.url, &config.httpsig_key).await?;
             server::update(
@@ -66,6 +69,7 @@ pub async fn handle_server_commands(
                     hosts: HashMap::from([(host, store_path)]),
                     public_key,
                     substitutor,
+                    netrc,
                 },
             )
             .await?;

@@ -4157,6 +4157,7 @@ dependencies = [
  "serde_json",
  "similar",
  "ssh-key",
+ "tempfile",
  "tokio",
  "url",
  "xdg",

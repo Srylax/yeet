@@ -11,7 +11,6 @@ use rootcause::hooks::Hooks;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, bail, report};
 use url::Url;
-use yeet::cachix::CachixInfo;
 use yeet::display::diff_inline;
 use yeet::nix::{self, run_vm};
 use yeet::{cachix, display, server};
@@ -60,7 +59,12 @@ async fn main() -> Result<(), Report> {
                     .context("Failed to get status")?
             );
         }
-        Commands::Publish { path, host, darwin } => {
+        Commands::Publish {
+            path,
+            host,
+            darwin,
+            netrc,
+        } => {
             let cachix = config.cachix.clone().ok_or(report!(
                 "Cachix cache name required. Set it in config or via the --cachix flag"
             ))?;
@@ -98,6 +102,7 @@ async fn main() -> Result<(), Report> {
                     hosts,
                     public_key,
                     substitutor: format!("https://{cachix}.cachix.org"),
+                    netrc,
                 },
             )
             .await?;
