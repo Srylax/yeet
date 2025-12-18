@@ -3,8 +3,8 @@ use backon::{ConstantBuilder, Retryable as _};
 use ed25519_dalek::VerifyingKey;
 use httpsig_hyper::prelude::SecretKey;
 use rootcause::prelude::ResultExt as _;
-use rootcause::{Report, bail};
-use std::io::{BufRead as _, BufReader, Write};
+use rootcause::{Report, bail, report};
+use std::io::{self, BufRead as _, BufReader, Write};
 use std::path::Path;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -150,8 +150,11 @@ fn download(version: &api::RemoteStorePath) -> Result<(), Report> {
     info!("Downloading {}", version.store_path);
     let mut keys = trusted_public_keys()?;
     keys.push(version.public_key.clone());
+    keys.sort();
+    keys.dedup();
 
     let mut command = Command::new("nix-store");
+    command.stderr(io::stderr()).stdout(io::stdout());
     command.args(vec![
         "--realise",
         &version.store_path,
@@ -166,8 +169,8 @@ fn download(version: &api::RemoteStorePath) -> Result<(), Report> {
         "0",
     ]);
 
+    let mut netrc_file = NamedTempFile::new().context("Could not create netrc temp file")?;
     if let Some(netrc) = &version.netrc {
-        let mut netrc_file = NamedTempFile::new().context("Could not create netrc temp file")?;
         netrc_file
             .write_all(netrc.as_bytes())
             .context("Could not write to the temp netrc file")?;
@@ -180,11 +183,23 @@ fn download(version: &api::RemoteStorePath) -> Result<(), Report> {
     }
 
     let download = command.output()?;
+
     if !download.status.success() {
-        bail!("{}", String::from_utf8(download.stderr)?);
+        return Err(report!("{}", String::from_utf8(download.stderr)?)
+            .context("Could not realize new version")
+            .attach(format!(
+                "Command: {}",
+                command
+                    .get_args()
+                    .map(|ostr| ostr.to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ))
+            .into_dynamic());
     }
     Ok(())
 }
+// nix-store --realise "/nix/store/fv9r9nrwwmvbf527i2c2197rln939f8n-nixos-system-nixos-25.11.1056.d9bc5c7dceb3" --option extra-substituters "https://bsi.cachix.org" --option trusted-public-keys "bsi.cachix.org-1:ytMwIH1n+V5/EFzxdHvkXSc+DCiPrrTqLEIhGe8osl4=" --option narinfo-cache-negative-ttl 0 --option netrc-file /tmp/netrc
 
 fn set_system_profile(version: &api::RemoteStorePath) -> Result<(), Report> {
     info!("Setting system profile to {}", version.store_path);
