@@ -69,7 +69,7 @@ pub enum Commands {
 
         /// netrc File to use when downloading from the cache. Useful when using private caches
         #[arg(long)]
-        netrc: Option<api::NETRC>,
+        netrc: Option<PathBuf>,
 
         /// Which hosts should be built? Defaults to current ARCH
         #[arg(

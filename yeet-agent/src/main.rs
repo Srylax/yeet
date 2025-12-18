@@ -1,5 +1,6 @@
 //! # Yeet Agent
 
+use std::fs::read_to_string;
 use std::path::Path;
 
 use api::key::get_secret_key;
@@ -68,6 +69,15 @@ async fn main() -> Result<(), Report> {
             let cachix = config.cachix.clone().ok_or(report!(
                 "Cachix cache name required. Set it in config or via the --cachix flag"
             ))?;
+
+            let netrc = match netrc {
+                Some(netrc) => Some(
+                    read_to_string(&netrc)
+                        .context("Could not read netrc file")
+                        .attach(format!("File: {}", &netrc.to_string_lossy()))?,
+                ),
+                None => None,
+            };
 
             let public_key = if let Some(key) = &config.cachix_key {
                 key.clone()
