@@ -6,7 +6,7 @@ use std::{
 
 use api::key::{get_secret_key, get_verify_key};
 use log::info;
-use rootcause::Report;
+use rootcause::{Report, prelude::ResultExt as _};
 use yeet::{display::diff_inline, server};
 
 use crate::{
@@ -61,6 +61,14 @@ pub async fn handle_server_commands(
             substitutor,
             netrc,
         } => {
+            let netrc = match netrc {
+                Some(netrc) => Some(
+                    read_to_string(&netrc)
+                        .context("Could not read netrc file")
+                        .attach(format!("File: {}", &netrc.to_string_lossy()))?,
+                ),
+                None => None,
+            };
             server::update(
                 &config.url,
                 &get_secret_key(&config.httpsig_key)?,

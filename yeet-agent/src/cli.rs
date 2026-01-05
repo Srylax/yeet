@@ -143,7 +143,7 @@ pub enum ServerCommands {
 
         /// netrc File to use when downloading from the cache. Useful when using private caches
         #[arg(long)]
-        netrc: Option<api::NETRC>,
+        netrc: Option<PathBuf>,
     },
     /// Register a new host
     Register {
