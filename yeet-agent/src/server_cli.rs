@@ -61,7 +61,6 @@ pub async fn handle_server_commands(
             substitutor,
             netrc,
         } => {
-            let before = status_string(&config.url, &config.httpsig_key).await?;
             server::update(
                 &config.url,
                 &get_secret_key(&config.httpsig_key)?,
@@ -73,8 +72,6 @@ pub async fn handle_server_commands(
                 },
             )
             .await?;
-            let after = status_string(&config.url, &config.httpsig_key).await?;
-            info!("{}", diff_inline(&before, &after));
         }
         ServerCommands::VerifyStatus => {
             let status =

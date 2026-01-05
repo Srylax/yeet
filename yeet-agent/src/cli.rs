@@ -199,7 +199,7 @@ pub enum ServerCommands {
         #[arg(index = 1)]
         key: PathBuf,
         /// Should the key be added as admin or as build
-        #[arg(value_enum)]
+        #[arg(value_enum, index = 2)]
         admin: AuthLevel,
     },
     /// Remove a key from the server (can also used to remove hosts)
