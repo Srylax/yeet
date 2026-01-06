@@ -33,7 +33,11 @@ console = "0.16.1"
 backon = "1.6.0"
 rootcause = "0.11.0"
 tempfile = "3.23.0"
+shadow-rs = { version = "1.5", default-features = false }
 
+
+[build-dependencies]
+shadow-rs = "1.5"
 
 [lints]
 workspace = true

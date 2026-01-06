@@ -1,13 +1,13 @@
-use std::{cmp::Ordering, fmt::Display, os::linux::raw::stat, path::Path};
+use std::{fmt::Display, path::Path};
 
 use api::key::get_secret_key;
 use console::style;
-use jiff::ToSpan;
-use log::warn;
 use rootcause::{Report, prelude::ResultExt};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use yeet::{display, nix, server};
+
+shadow_rs::shadow!(build);
 
 // warning: only displaying local information if you want status information run `yeet` with root permission
 // System:
@@ -55,7 +55,7 @@ pub async fn local_status(url: &Url, httpsig_key: &Path) -> Result<(), Report> {
             "Up to date!", style("yes").green().bold(),
             "Mode!", format!("{} ({})",style("Provisioned").green().bold(),style("https://yeet.bsiag.com").underlined()),
             "Daemon!", format!("{} since Mon 2026-01-05 14:59:13 CET; 15h ago", style("active (running)").green().bold()),
-            "Version!", "0.2.0",
+            "Version", format!("{}", build::CLAP_LONG_VERSION),
         ],
         style("System:").underlined() => [
             "Kernel", local_version.kernel,
@@ -124,11 +124,16 @@ fn print_status(status: &[(&dyn Display, &[(&dyn Display, &dyn Display)])]) {
         println!("{section}");
 
         for (key, value) in *items {
-            // Check for empty key (used for list continuation)
-            if key.to_string().is_empty() {
-                // {:>w$} prints empty padding of size 'w'
-                // followed by 2 spaces (to replace ": ")
-                println!("{:>w$}  {}", "", value, w = width);
+            let value = value.to_string();
+            // Test if it is a multiline
+            if value.lines().count() > 1 {
+                let mut lines = value.lines();
+                // print first normally key: Value
+                println!("{:>w$}: {}", key, lines.next().unwrap(), w = width);
+
+                for line in lines {
+                    println!("{:>w$}  {}", "", line, w = width);
+                }
             } else {
                 println!("{:>w$}: {}", key, value, w = width);
             }

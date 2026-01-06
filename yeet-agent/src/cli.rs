@@ -1,10 +1,15 @@
 use std::{env::current_dir, path::PathBuf};
 
+use build::CLAP_LONG_VERSION;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
+use shadow_rs::shadow;
 use url::Url;
 
+shadow!(build);
+
 #[derive(Parser)]
+#[clap(long_version = CLAP_LONG_VERSION)]
 #[command(version, about, long_about = None)]
 pub struct Yeet {
     #[command(flatten)]
