@@ -24,6 +24,7 @@ mod agent;
 mod cli;
 mod server_cli;
 mod status;
+mod systemd;
 mod version;
 
 #[tokio::main]
@@ -68,7 +69,7 @@ async fn main() -> Result<(), Report> {
             agent::agent(&config, sleep, facter).await?;
         }
         Commands::Status => {
-            status::local_status(&config.url, &config.httpsig_key).await?;
+            status::status(&config.url, &get_secret_key(&config.httpsig_key)?).await?;
             // info!(
             //     "{}",
             //     status_string(&config.url, &config.httpsig_key)
