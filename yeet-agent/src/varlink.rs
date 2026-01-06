@@ -1,13 +1,15 @@
-use rootcause::Report;
+use std::{
+    os::unix::fs::{PermissionsExt, lchown},
+    path::Path,
+};
+
+use nix::unistd::Group;
+use rootcause::{Report, prelude::ResultExt};
 use serde::{Deserialize, Serialize};
-use tokio::fs::remove_file;
-use zlink::{Call,
-            Connection,
-            ReplyError,
-            Service,
-            connection::Socket,
-            service::MethodReply,
-            unix};
+use tokio::fs::{self, remove_file};
+use zlink::{
+    Call, Connection, ReplyError, Service, connection::Socket, proxy, service::MethodReply, unix,
+};
 
 const SOCKET_PATH: &str = "/run/yeet/agent.varlink";
 
@@ -18,12 +20,18 @@ pub enum YeetMethod {
     Status,
 }
 
-#[derive(Debug, Serialize)]
-pub enum YeetReply {
-    DaemonStatus(DaemonStatus),
+#[proxy("ch.yeetme.yeet")]
+pub trait YeetProxy {
+    async fn status(&mut self) -> zlink::Result<Result<DaemonStatus, YeetDaemonError>>;
 }
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum YeetReply {
+    Status(DaemonStatus),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DaemonStatus {
     pub up_to_date: UpToDate,
     pub server: String,
@@ -31,7 +39,7 @@ pub struct DaemonStatus {
     pub version: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[expect(dead_code)]
 pub enum UpToDate {
     Yes,
@@ -39,7 +47,7 @@ pub enum UpToDate {
     Detached,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[expect(dead_code)]
 pub enum YeetDaemonMode {
     Provisioned,
@@ -47,21 +55,18 @@ pub enum YeetDaemonMode {
     Unknown,
 }
 
+pub async fn client() -> Result<Connection<zlink::unix::Stream>, Report> {
+    log::debug!("Connecting to {SOCKET_PATH}");
+    Ok(unix::connect(SOCKET_PATH)
+        .await
+        .context("Trying to set up varlink connection. Make sure you are in the `yeet` group")?)
+}
+
 #[derive(Debug, ReplyError)]
 #[zlink(interface = "ch.yeetme.yeet")]
 pub enum YeetDaemonError {}
 
 pub struct YeetVarlinkService;
-
-impl YeetVarlinkService {
-    pub async fn start() -> Result<(), Report> {
-        let service = Self;
-        let _ = remove_file(SOCKET_PATH).await;
-        let listener = unix::bind(SOCKET_PATH)?;
-        let server = zlink::Server::new(listener, service);
-        server.run().await.map_err(std::convert::Into::into)
-    }
-}
 
 impl Service for YeetVarlinkService {
     type MethodCall<'de> = YeetMethod;
@@ -80,7 +85,8 @@ impl Service for YeetVarlinkService {
     ) -> MethodReply<Self::ReplyParams<'ser>, Self::ReplyStream, Self::ReplyError<'ser>> {
         match method.method() {
             YeetMethod::Status => {
-                MethodReply::Single(Some(YeetReply::DaemonStatus(DaemonStatus {
+                log::debug!("Varlink: Daemon status requested");
+                MethodReply::Single(Some(YeetReply::Status(DaemonStatus {
                     up_to_date: UpToDate::Yes,
                     server: "heloooooo".to_owned(),
                     mode: YeetDaemonMode::Provisioned,
@@ -89,4 +95,41 @@ impl Service for YeetVarlinkService {
             }
         }
     }
+}
+
+impl YeetVarlinkService {
+    pub async fn start() -> Result<(), Report> {
+        let service = Self;
+        let _ = remove_file(SOCKET_PATH).await;
+        fs::create_dir_all(Path::new(SOCKET_PATH).parent().unwrap())
+            .await
+            .context("Ensuring the Socket dir is available")?;
+        let listener = unix::bind(SOCKET_PATH).attach(format!("SOCKET_PATH: {SOCKET_PATH}"))?;
+        log::debug!("Socket created at {SOCKET_PATH}");
+        let server = zlink::Server::new(listener, service);
+        log::info!("Listening for varlink connections");
+        setup_socket_permissions(SOCKET_PATH, "yeet").await?;
+        server.run().await.map_err(std::convert::Into::into)
+    }
+}
+
+async fn setup_socket_permissions(path: &str, group_name: &str) -> Result<(), Report> {
+    let group = Group::from_name(group_name)
+        .context("Error while trying to look up `yeet` group on the system")?
+        .ok_or(rootcause::report!("`yeet` Group does not exist on system"))?;
+
+    lchown(path, None, Some(group.gid.as_raw()))
+        .context("Trying to set varlink socket connection")?;
+
+    let mut perms = fs::metadata(path)
+        .await
+        .context("Trying to fetch existing file permissions")?
+        .permissions();
+    perms.set_mode(0o660);
+    fs::set_permissions(path, perms)
+        .await
+        .context("Trying to set file permission")?;
+
+    log::debug!("Socket permissions set: Group '{group_name}' can now access {path}");
+    Ok(())
 }

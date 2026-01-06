@@ -1,9 +1,11 @@
-use std::{fs::File,
-          io::{self, BufRead as _, BufReader, Write as _},
-          path::Path,
-          process::Command,
-          sync::OnceLock,
-          time::Duration};
+use std::{
+    fs::File,
+    io::{self, BufRead as _, BufReader, Write as _},
+    path::Path,
+    process::Command,
+    sync::OnceLock,
+    time::Duration,
+};
 
 use api::key::{get_secret_key, get_verify_key};
 use backon::{ConstantBuilder, Retryable as _};
@@ -30,8 +32,12 @@ pub async fn agent(config: &Config, sleep: u64, facter: bool) -> Result<(), Repo
     let key = get_secret_key(&config.httpsig_key)?;
     let pub_key = get_verify_key(&config.httpsig_key)?;
 
-    // start varlink service
-    tokio::task::spawn_local(varlink::YeetVarlinkService::start());
+    log::info!("Spawning varlink daemon");
+    tokio::task::spawn_local(async {
+        if let Err(err) = varlink::YeetVarlinkService::start().await {
+            log::error!("Varlink failure:\n{err}");
+        }
+    });
 
     (|| async { agent_loop(config, &key, pub_key, sleep, facter).await })
         .retry(

@@ -9,11 +9,11 @@
 
   cachix.enable = false;
 
-  packages = [
-    pkgs.openssl
-    pkgs.rustup # because else we cannot use cargo +nightly fmt
-    pkgs.openssl
-    pkgs.gcc
-    pkgs.pkg-config
+  packages = with pkgs; [
+    openssl
+    rustup # because else we cannot use cargo +nightly fmt
+    openssl
+    gcc
+    pkg-config
   ];
 }

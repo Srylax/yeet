@@ -9,20 +9,26 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use yeet::{display, nix, server};
 
-use crate::{section::{self, DisplaySection, Section, section},
-            systemd,
-            version};
+use crate::{
+    section::{DisplaySection, Section, section},
+    systemd,
+    varlink::{self, YeetProxy},
+    version,
+};
 
 shadow_rs::shadow!(build);
 
 pub async fn status(url: &Url, key: &SecretKey, json: bool, local: bool) -> Result<(), Report> {
-    let yeet = yeet_info(url, key, local).await?;
-    let system = system_info()?;
-    if json {
-        println!("{}", serde_json::to_string(&Status { system, yeet })?);
-    } else {
-        section::print_sections(&[yeet.as_section(), system.as_section()]);
-    }
+    let a = varlink::client().await?.status().await?;
+    println!("{a:?}");
+
+    // let yeet = yeet_info(url, key, local).await?;
+    // let system = system_info()?;
+    // if json {
+    //     println!("{}", serde_json::to_string(&Status { system, yeet })?);
+    // } else {
+    //     section::print_sections(&[yeet.as_section(), system.as_section()]);
+    // }
     Ok(())
 }
 
