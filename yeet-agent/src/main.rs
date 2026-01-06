@@ -1,25 +1,21 @@
 //! # Yeet Agent
 
-use crate::{
-    cli::{Commands, Config, Yeet},
-    status::status_string,
-};
+use std::{fs::read_to_string,
+          io::{IsTerminal as _, Write as _}};
+
 use api::key::get_secret_key;
 use clap::Parser as _;
-use figment::{
-    Figment,
-    providers::{Env, Format as _, Serialized, Toml},
-};
+use figment::{Figment,
+              providers::{Env, Format as _, Serialized, Toml}};
 use log::info;
-use rootcause::{Report, bail, hooks::Hooks, prelude::ResultExt, report};
-use std::io::{IsTerminal, Write};
-use std::{fmt::Debug, fs::read_to_string};
-use yeet::{
-    cachix,
-    display::diff_inline,
-    nix::{self, run_vm},
-    server,
-};
+use rootcause::{Report, bail, hooks::Hooks, prelude::ResultExt as _, report};
+use yeet::{cachix,
+           display::diff_inline,
+           nix::{self, run_vm},
+           server};
+
+use crate::{cli::{Commands, Config, Yeet},
+            status::status_string};
 
 mod agent;
 mod cli;
@@ -30,6 +26,7 @@ mod systemd;
 mod varlink;
 mod version;
 
+#[expect(unexpected_cfgs)]
 #[tokio::main(flavor = "local")]
 #[expect(clippy::too_many_lines)]
 #[expect(clippy::unwrap_in_result)]
@@ -146,6 +143,6 @@ async fn main() -> Result<(), Report> {
             info!("{}", diff_inline(&before, &after));
         }
         Commands::Server(args) => server_cli::handle_server_commands(args.command, &config).await?,
-    };
+    }
     Ok(())
 }

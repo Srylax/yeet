@@ -1,17 +1,15 @@
+use std::{cmp::Ordering,
+          collections::{HashMap, HashSet, hash_map}};
+
 use axum::http::StatusCode;
 use axum_thiserror::ErrorStatus;
+use ed25519_dalek::VerifyingKey;
 use httpsig_hyper::prelude::{AlgorithmName, PublicKey, VerifyingKey as _};
 use jiff::{ToSpan as _, Zoned};
 use rand::Rng;
-use serde_json_any_key::any_key_map;
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet, hash_map},
-};
-use thiserror::Error;
-
-use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
+use serde_json_any_key::any_key_map;
+use thiserror::Error;
 
 #[derive(Error, Debug, ErrorStatus)]
 pub enum StateError {

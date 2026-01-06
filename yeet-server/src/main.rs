@@ -1,24 +1,25 @@
 //! Yeet that Config
 
-use crate::routes::key::{add_key, remove_key};
-use crate::routes::register::register_host;
-use crate::routes::system_check::system_check;
-use crate::routes::update::update_hosts;
-use crate::routes::verify::{add_verification_attempt, is_host_verified, verify_attempt};
-use crate::state::AppState;
+use std::{env,
+          fs::{File, OpenOptions, rename},
+          hash::{DefaultHasher, Hash as _, Hasher as _},
+          os::unix::prelude::FileExt as _,
+          sync::Arc,
+          time::Duration};
+
 use api::key::get_verify_key;
-use axum::Router;
-use axum::routing::{get, post};
+use axum::{Router,
+           routing::{get, post}};
 use parking_lot::RwLock;
 use routes::status;
-use std::env;
-use std::fs::{File, OpenOptions, rename};
-use std::hash::{DefaultHasher, Hash as _, Hasher as _};
-use std::os::unix::prelude::FileExt as _;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::net::TcpListener;
-use tokio::time::interval; // TODO: is this enough or do we need to use rand_chacha?
+use tokio::{net::TcpListener, time::interval};
+
+use crate::{routes::{key::{add_key, remove_key},
+                     register::register_host,
+                     system_check::system_check,
+                     update::update_hosts,
+                     verify::{add_verification_attempt, is_host_verified, verify_attempt}},
+            state::AppState}; // TODO: is this enough or do we need to use rand_chacha?
 
 mod error;
 mod httpsig;

@@ -1,16 +1,17 @@
-use crate::{
-    section::{self, DisplaySection, Section, section},
-    systemd, version,
-};
+use std::{fmt::Display, path::Path};
+
 use api::{AgentAction, key::get_secret_key};
 use console::style;
 use httpsig_hyper::prelude::SecretKey;
 use jiff::tz::TimeZone;
-use rootcause::{Report, prelude::ResultExt};
+use rootcause::{Report, prelude::ResultExt as _};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, path::Path};
 use url::Url;
 use yeet::{display, nix, server};
+
+use crate::{section::{self, DisplaySection, Section, section},
+            systemd,
+            version};
 
 shadow_rs::shadow!(build);
 
@@ -162,7 +163,7 @@ impl DisplaySection for SystemInfo {
             )
             .unwrap();
 
-        let last_switch = if last_switch.total(jiff::Unit::Hour).unwrap() < 24f64 {
+        let last_switch = if last_switch.total(jiff::Unit::Hour).unwrap() < 24_f64 {
             style(last_switch).green().bold()
         } else {
             style(last_switch).red().bold()
@@ -178,7 +179,7 @@ impl DisplaySection for SystemInfo {
             style("System:").underlined() => [
                 "Kernel", self.kernel,
                 "NixOS version", format!("{} Generation {}", os_version, style(self.current_generation).bold()),
-                "Build date", format!("└─{}; {:#} ago",self.build_date, last_switch),
+                "Build date", format!("\u{2514}\u{2500}{}; {:#} ago",self.build_date, last_switch),
                 "Variant", style(&self.variant).bold(),
                 "Conf revision", self.configuration_revision[..8],
                 "Nixpkgs version", self.nixpkgs_revision[..8],

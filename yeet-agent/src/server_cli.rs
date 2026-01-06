@@ -1,16 +1,14 @@
-use crate::{
-    cli::{AuthLevel, Config, ServerCommands},
-    status::status_string,
-};
+use std::{collections::HashMap,
+          fs::{File, read_to_string},
+          io::Write as _};
+
 use api::key::{get_secret_key, get_verify_key};
 use log::info;
 use rootcause::{Report, prelude::ResultExt as _};
-use std::{
-    collections::HashMap,
-    fs::{File, read_to_string},
-    io::Write,
-};
 use yeet::{display::diff_inline, server};
+
+use crate::{cli::{AuthLevel, Config, ServerCommands},
+            status::status_string};
 
 pub async fn handle_server_commands(
     command: ServerCommands,
@@ -119,7 +117,7 @@ pub async fn handle_server_commands(
             .await?;
             if let Some(nixos_facter) = artifacts.nixos_facter {
                 File::create_new(&facter)?.write_all(nixos_facter.as_bytes())?;
-                info!("File {} written", facter.as_os_str().display())
+                info!("File {} written", facter.as_os_str().display());
             }
         }
         ServerCommands::AddKey { key, admin } => {

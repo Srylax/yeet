@@ -25,7 +25,7 @@ pub fn print_sections(sections: &[Section]) {
         println!("{section}");
 
         for (key, value) in items {
-            let value = value.to_string();
+            let value = value.clone();
             // Test if it is a multiline
             if value.lines().count() > 1 {
                 let mut lines = value.lines();
@@ -36,7 +36,7 @@ pub fn print_sections(sections: &[Section]) {
                     println!("{:>w$}  {}", "", line, w = width);
                 }
             } else {
-                println!("{:>w$}: {}", key, value, w = width);
+                println!("{key:>width$}: {value}");
             }
         }
         println!(); // Blank line after section

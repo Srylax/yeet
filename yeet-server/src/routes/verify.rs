@@ -13,10 +13,8 @@ use std::sync::Arc;
 use axum::{Json, extract::State, http::StatusCode};
 use parking_lot::RwLock;
 
-use crate::{
-    httpsig::{HttpSig, VerifiedJson},
-    state::{AppState, StateError},
-};
+use crate::{httpsig::{HttpSig, VerifiedJson},
+            state::{AppState, StateError}};
 
 /// That is literally it because the `HttpSig` extractor checks if the key is in the keyids
 pub async fn is_host_verified(HttpSig(_http_key): HttpSig) -> StatusCode {

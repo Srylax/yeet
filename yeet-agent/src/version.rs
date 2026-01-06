@@ -1,5 +1,6 @@
-use rootcause::{Report, prelude::ResultExt as _};
 use std::fs::read_link;
+
+use rootcause::{Report, prelude::ResultExt as _};
 
 pub fn get_active_version() -> Result<String, Report> {
     Ok(read_link("/run/current-system")

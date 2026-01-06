@@ -1,4 +1,10 @@
-use crate::{cli::Config, varlink, version::get_active_version};
+use std::{fs::File,
+          io::{self, BufRead as _, BufReader, Write as _},
+          path::Path,
+          process::Command,
+          sync::OnceLock,
+          time::Duration};
+
 use api::key::{get_secret_key, get_verify_key};
 use backon::{ConstantBuilder, Retryable as _};
 use ed25519_dalek::VerifyingKey;
@@ -6,17 +12,11 @@ use httpsig_hyper::prelude::SecretKey;
 use log::{error, info};
 use notify_rust::Notification;
 use rootcause::{Report, bail, prelude::ResultExt as _, report};
-use std::{
-    fs::File,
-    io::{self, BufRead as _, BufReader, Write},
-    path::Path,
-    process::Command,
-    sync::OnceLock,
-    time::Duration,
-};
 use tempfile::NamedTempFile;
 use tokio::time;
 use yeet::{nix, server};
+
+use crate::{cli::Config, varlink, version::get_active_version};
 
 static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 
@@ -81,7 +81,7 @@ async fn agent_loop(
             },
         )
         .await?;
-        VERIFICATION_CODE.set(code);
+        let _ = VERIFICATION_CODE.set(code);
         info!("Your verification code is: {code}");
         bail!("Waiting for verification");
     }

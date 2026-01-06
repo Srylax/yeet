@@ -1,16 +1,12 @@
+use std::sync::LazyLock;
+
 use api::httpsig::ReqwestSig as _;
 use http::StatusCode;
 use httpsig_hyper::prelude::*;
-use rootcause::{IntoReport,
-                Report,
-                compat::boxed_error::IntoBoxedError,
-                prelude::ResultExt,
-                report};
-use serde::de::DeserializeOwned;
-use std::{error::Error, sync::LazyLock};
-use url::Url;
-
 use reqwest::{Client, Response};
+use rootcause::{Report, report};
+use serde::de::DeserializeOwned;
+use url::Url;
 
 #[expect(clippy::expect_used, reason = "Is there another way?")]
 static COMPONENTS: LazyLock<Vec<message_component::HttpMessageComponentId>> = LazyLock::new(|| {
@@ -160,6 +156,7 @@ fn sig_param<K: SigningKey + Sync>(key: &K) -> Result<HttpSignatureParams, Repor
     Ok(signature_params)
 }
 
+#[expect(async_fn_in_trait)]
 pub trait ErrorForJson {
     async fn error_for_json<T: DeserializeOwned>(self) -> Result<T, Report>;
     async fn error_for_code(self) -> Result<StatusCode, Report>;

@@ -1,10 +1,12 @@
-use crate::server::ErrorForJson as _;
+use std::ffi::OsStr;
+
 use reqwest::Client;
 use rootcause::{Report, bail};
 use serde::{Deserialize, Serialize};
-use std::ffi::OsStr;
 use tokio::process::Command;
 use url::Url;
+
+use crate::server::ErrorForJson as _;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

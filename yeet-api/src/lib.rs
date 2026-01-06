@@ -1,9 +1,9 @@
 //! API for yeet
 
-use jiff::Zoned;
 use std::collections::HashMap;
 
 use ed25519_dalek::VerifyingKey;
+use jiff::Zoned;
 use serde::{Deserialize, Serialize};
 
 pub mod httpsig;

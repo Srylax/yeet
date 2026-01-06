@@ -1,13 +1,11 @@
 use std::sync::Arc;
 
-use crate::{
-    AppState,
-    httpsig::{HttpSig, VerifiedJson},
-    state::StateError,
-};
-use axum::extract::State;
-use axum::http::StatusCode;
+use axum::{extract::State, http::StatusCode};
 use parking_lot::RwLock;
+
+use crate::{AppState,
+            httpsig::{HttpSig, VerifiedJson},
+            state::StateError};
 
 /// Pre-registeres the host.
 /// Currently only one host at a time

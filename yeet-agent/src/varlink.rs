@@ -1,4 +1,4 @@
-use rootcause::{IntoReport, Report};
+use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use tokio::fs::remove_file;
 use zlink::{Call,
@@ -32,6 +32,7 @@ pub struct DaemonStatus {
 }
 
 #[derive(Debug, Serialize)]
+#[expect(dead_code)]
 pub enum UpToDate {
     Yes,
     No,
@@ -39,6 +40,7 @@ pub enum UpToDate {
 }
 
 #[derive(Debug, Serialize)]
+#[expect(dead_code)]
 pub enum YeetDaemonMode {
     Provisioned,
     Detached,
@@ -57,7 +59,7 @@ impl YeetVarlinkService {
         let _ = remove_file(SOCKET_PATH).await;
         let listener = unix::bind(SOCKET_PATH)?;
         let server = zlink::Server::new(listener, service);
-        server.run().await.map_err(|e| e.into())
+        server.run().await.map_err(std::convert::Into::into)
     }
 }
 

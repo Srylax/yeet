@@ -1,9 +1,10 @@
+use std::io::Write as _;
+
 use api::hash_hex;
 use console::style;
 use jiff::{SpanRound, Unit, Zoned};
 use rootcause::Report;
 use similar::{ChangeTag, DiffOp, TextDiff};
-use std::io::Write as _;
 
 // pub trait Fragment {
 //     fn fragment(&self, fragment: &mut IndexMap<String, String>);
@@ -33,7 +34,7 @@ pub fn host(host: &api::Host) -> Result<String, Report> {
     if let Some(next) = host.provision_state.store_path()
         && next != host.latest_store_path()
     {
-        writeln!(&mut w, " • Next Version: {}", hash_hex(next))?;
+        writeln!(&mut w, " \u{2022} Next Version: {}", hash_hex(next))?;
     }
 
     writeln!(
