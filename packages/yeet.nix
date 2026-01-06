@@ -28,6 +28,8 @@ rustPlatform.buildRustPackage {
     pkgs.dbus
   ];
 
+  RUSTFLAGS = "--cfg tokio_unstable";
+
   postInstall = ''
     wrapProgram $out/bin/yeet --prefix PATH : ${
       lib.makeBinPath [

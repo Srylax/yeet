@@ -1,21 +1,29 @@
 //! # Yeet Agent
 
-use std::{fs::read_to_string,
-          io::{IsTerminal as _, Write as _}};
+use std::{
+    fs::read_to_string,
+    io::{IsTerminal as _, Write as _},
+};
 
 use api::key::get_secret_key;
 use clap::Parser as _;
-use figment::{Figment,
-              providers::{Env, Format as _, Serialized, Toml}};
+use figment::{
+    Figment,
+    providers::{Env, Format as _, Serialized, Toml},
+};
 use log::info;
 use rootcause::{Report, bail, hooks::Hooks, prelude::ResultExt as _, report};
-use yeet::{cachix,
-           display::diff_inline,
-           nix::{self, run_vm},
-           server};
+use yeet::{
+    cachix,
+    display::diff_inline,
+    nix::{self, run_vm},
+    server,
+};
 
-use crate::{cli::{Commands, Config, Yeet},
-            status::status_string};
+use crate::{
+    cli::{Commands, Config, Yeet},
+    status::status_string,
+};
 
 mod agent;
 mod cli;
