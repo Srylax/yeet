@@ -128,3 +128,59 @@ pub fn nixos_version() -> Result<NixOSVersion, Report> {
 
     Ok(serde_json::from_slice(&output.stdout)?)
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NixOSGeneration {
+    pub generation: u32,
+    pub date: jiff::civil::DateTime,
+    pub nixos_version: String,
+    pub kernel_version: String,
+    pub configuration_revision: String,
+    pub specialisations: Vec<String>,
+    pub current: bool,
+}
+
+impl Default for NixOSGeneration {
+    fn default() -> Self {
+        Self {
+            generation: 0,
+            date: Default::default(),
+            nixos_version: "unknown".to_owned(),
+            kernel_version: "unknown".to_owned(),
+            configuration_revision: "unknown".to_owned(),
+            specialisations: Default::default(),
+            current: Default::default(),
+        }
+    }
+}
+
+pub fn nixos_generations() -> Result<Vec<NixOSGeneration>, Report> {
+    let output = Command::new("nixos-rebuild")
+        .arg("list-generations")
+        .arg("--json")
+        .stdout(Stdio::piped())
+        .spawn()
+        .context("Could not spawn `nixos-rebuild`")?
+        .wait_with_output()?;
+
+    Ok(serde_json::from_slice(&output.stdout)?)
+}
+
+pub fn nixos_variant_name() -> Result<String, Report> {
+    let output = Command::new("grep")
+        .arg("^VARIANT=")
+        .arg("/etc/os-release")
+        .stdout(Stdio::piped())
+        .spawn()
+        .context("Could not spawn `grep`")?
+        .wait_with_output()?;
+
+    let output = String::from_utf8_lossy(&output.stdout).to_string();
+    let output = output
+        .trim()
+        .trim_start_matches("VARIANT=")
+        .trim_matches('"')
+        .to_owned();
+    Ok(output)
+}

@@ -1,9 +1,11 @@
-use std::{fmt::Display, os::linux::raw::stat, path::Path};
+use std::{cmp::Ordering, fmt::Display, os::linux::raw::stat, path::Path};
 
 use api::key::get_secret_key;
 use console::style;
+use jiff::ToSpan;
 use log::warn;
-use rootcause::Report;
+use rootcause::{Report, prelude::ResultExt};
+use serde::{Deserialize, Serialize};
 use url::Url;
 use yeet::{display, nix, server};
 
@@ -26,30 +28,75 @@ macro_rules! status {
     };
 }
 
-pub async fn local_status(url: &Url, httpsig_key: &Path) -> Result<String, Report> {
-    let nixos_version = nix::nixos_version()?;
+pub async fn local_status(url: &Url, httpsig_key: &Path) -> Result<(), Report> {
+    let local_version = local_version_info().context("Could note get local version information")?;
+
+    let last_switch = &local_version.build_date.until(jiff::Zoned::now())?.round(
+        jiff::SpanRound::new()
+            .smallest(jiff::Unit::Minute)
+            .mode(jiff::RoundMode::Trunc),
+    )?;
+
+    let last_switch = if last_switch.total(jiff::Unit::Hour)? < 24f64 {
+        style(last_switch).green()
+    } else {
+        style(last_switch).red()
+    };
+
+    let os_version = if local_version.nixos_version.starts_with("dirty") {
+        style(&local_version.nixos_version).red()
+    } else {
+        style(&local_version.nixos_version).green()
+    };
+
     log::warn!("hi!");
     status!(
         style("Yeet:").underlined() => [
-            "Up to date", style("yes").green().bold(),
-            "Mode", format!("{} ({})",style("Provisioned").green().bold(),style("https://yeet.bsiag.com").underlined()),
-            "Daemon", format!("{} since Mon 2026-01-05 14:59:13 CET; 15h ago", style("active (running)").green().bold()),
-            "Version", "0.2.0",
+            "Up to date!", style("yes").green().bold(),
+            "Mode!", format!("{} ({})",style("Provisioned").green().bold(),style("https://yeet.bsiag.com").underlined()),
+            "Daemon!", format!("{} since Mon 2026-01-05 14:59:13 CET; 15h ago", style("active (running)").green().bold()),
+            "Version!", "0.2.0",
         ],
         style("System:").underlined() => [
-            "Kernel", "6.12.63",
-            "Firmware Arch", "x64",
-            "NixOS version", nixos_version.nixos_version,
-            "Switch date", "└─2026-01-05 18:03:16; Xh ago",
-            "Conf version", nixos_version.configuration_revision,
-            "Nixpkgs version", nixos_version.nixpkgs_revision,
+            "Kernel", local_version.kernel,
+            "NixOS version", format!("{} Generation {}", os_version, local_version.current_generation),
+            "Build date", format!("└─{}; {:#} ago",local_version.build_date, last_switch),
+            "Variant", &nix::nixos_variant_name()?,
+            "Conf revision", &local_version.configuration_revision[..8],
+            "Nixpkgs version", &local_version.nixpkgs_revision[..8],
         ],
     );
-    todo!()
+    Ok(())
 }
 
-fn local_version_info() -> Result<String, Report> {
-    todo!()
+#[derive(Serialize, Deserialize)]
+pub struct LocalVersionInfo {
+    pub kernel: String,
+    pub nixos_version: String,
+    pub build_date: jiff::civil::DateTime,
+    pub variant: String,
+    pub configuration_revision: String,
+    pub nixpkgs_revision: String,
+    pub current_generation: u32,
+}
+fn local_version_info() -> Result<LocalVersionInfo, Report> {
+    let nixos_version = nix::nixos_version().context("Could not fetch nixos version")?;
+    let nixos_generations =
+        nix::nixos_generations().context("Could not fetch nixos generations")?;
+    let generation = nixos_generations
+        .into_iter()
+        .find(|g| g.current)
+        .unwrap_or_default();
+
+    Ok(LocalVersionInfo {
+        kernel: generation.kernel_version,
+        nixos_version: generation.nixos_version,
+        build_date: generation.date,
+        variant: nix::nixos_variant_name()?,
+        configuration_revision: generation.configuration_revision,
+        nixpkgs_revision: nixos_version.nixpkgs_revision,
+        current_generation: generation.generation,
+    })
 }
 
 async fn server_status(url: &Url, httpsig_key: &Path) -> Result<Vec<api::Host>, Report> {
