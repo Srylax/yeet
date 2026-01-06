@@ -22,6 +22,7 @@ use std::io::{IsTerminal, Write};
 
 mod agent;
 mod cli;
+mod section;
 mod server_cli;
 mod status;
 mod systemd;
@@ -68,8 +69,14 @@ async fn main() -> Result<(), Report> {
         Commands::Agent { sleep, facter } => {
             agent::agent(&config, sleep, facter).await?;
         }
-        Commands::Status => {
-            status::status(&config.url, &get_secret_key(&config.httpsig_key)?).await?;
+        Commands::Status { json, local } => {
+            status::status(
+                &config.url,
+                &get_secret_key(&config.httpsig_key)?,
+                json,
+                local,
+            )
+            .await?;
             // info!(
             //     "{}",
             //     status_string(&config.url, &config.httpsig_key)

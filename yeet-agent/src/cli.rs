@@ -105,7 +105,14 @@ pub enum Commands {
 
     /// Query the status of all or your local hosts
     /// Requires either admin credentials or sudo
-    Status,
+    Status {
+        /// Do not attempt to fetch the yeet status
+        #[arg(long)]
+        local: bool,
+        /// Instead of printing output everything as json
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Run you hosts inside a vm
     VM {
