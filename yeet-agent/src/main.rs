@@ -5,7 +5,6 @@ use std::fs::read_to_string;
 
 use api::key::get_secret_key;
 use clap::Parser as _;
-use console::style;
 use figment::Figment;
 use figment::providers::{Env, Format as _, Serialized, Toml};
 use log::info;
@@ -26,16 +25,17 @@ mod section;
 mod server_cli;
 mod status;
 mod systemd;
+mod varlink;
 mod version;
 
-#[tokio::main]
+#[tokio::main(flavor = "local")]
 #[expect(clippy::too_many_lines)]
 #[expect(clippy::unwrap_in_result)]
 async fn main() -> Result<(), Report> {
     Hooks::new()
-        .report_formatter(rootcause::hooks::builtin_hooks::report_formatter::DefaultReportFormatter::UNICODE_COLORS)
-        .install()
-        .expect("failed to install hooks");
+                .report_formatter(rootcause::hooks::builtin_hooks::report_formatter::DefaultReportFormatter::UNICODE_COLORS)
+                .install()
+                .expect("failed to install hooks");
 
     let mut log_builder =
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
@@ -144,6 +144,6 @@ async fn main() -> Result<(), Report> {
             info!("{}", diff_inline(&before, &after));
         }
         Commands::Server(args) => server_cli::handle_server_commands(args.command, &config).await?,
-    }
+    };
     Ok(())
 }

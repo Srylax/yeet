@@ -17,6 +17,7 @@ use log::{error, info};
 use notify_rust::Notification;
 
 use crate::cli::Config;
+use crate::varlink;
 use crate::version::get_active_version;
 
 static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
@@ -30,6 +31,9 @@ static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 pub async fn agent(config: &Config, sleep: u64, facter: bool) -> Result<(), Report> {
     let key = get_secret_key(&config.httpsig_key)?;
     let pub_key = get_verify_key(&config.httpsig_key)?;
+
+    // start varlink service
+    tokio::task::spawn_local(varlink::YeetVarlinkService::start());
 
     (|| async { agent_loop(config, &key, pub_key, sleep, facter).await })
         .retry(

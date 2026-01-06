@@ -3378,9 +3378,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.48.0"
+version = "1.49.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff360e02eab121e0bc37a2d3b4d4dc622e6eda3a8e5253d5435ecf5bd4c68408"
+checksum = "72a2903cd7736441aac9df9d7688bd0ce48edccaadf181c3b90be801e81d3d86"
 dependencies = [
  "bytes",
  "libc",
@@ -3390,6 +3390,7 @@ dependencies = [
  "signal-hook-registry",
  "socket2",
  "tokio-macros",
+ "tracing",
  "windows-sys 0.61.2",
 ]
 
@@ -3422,6 +3423,18 @@ checksum = "1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61"
 dependencies = [
  "rustls",
  "tokio",
+]
+
+[[package]]
+name = "tokio-stream"
+version = "0.1.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32da49809aab5c3bc678af03902d4ccddea2a87d028d86392a4b1560c6906c70"
+dependencies = [
+ "futures-core",
+ "pin-project-lite",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -4277,6 +4290,7 @@ dependencies = [
  "ed25519-dalek",
  "env_logger",
  "figment",
+ "futures-util",
  "http",
  "httpsig-hyper",
  "jiff",
@@ -4294,6 +4308,7 @@ dependencies = [
  "url",
  "xdg",
  "yeet-api",
+ "zlink",
 ]
 
 [[package]]
@@ -4500,6 +4515,72 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "zlink"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04baab6c44f6c5f33dd26dffabe2c6473d9a93a080c3424865df068d4e76f58a"
+dependencies = [
+ "zlink-smol",
+ "zlink-tokio",
+]
+
+[[package]]
+name = "zlink-core"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "487e09febc08bcbac32cee2c26e85779351f711146db0176a3f61a3fea1c955f"
+dependencies = [
+ "futures-util",
+ "itoa",
+ "libc",
+ "pin-project-lite",
+ "rustix",
+ "ryu",
+ "serde",
+ "serde_json",
+ "tracing",
+ "zlink-macros",
+]
+
+[[package]]
+name = "zlink-macros"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6a10a1ed09222634dde2db7055226eafae571389ce57dae3707bd2a76f6dc7b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "zlink-smol"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72ec157812fcde1a3f45fea27db5a6fa1868ecbf5e11644166ab4caf5e3546dd"
+dependencies = [
+ "async-broadcast",
+ "async-channel",
+ "async-io",
+ "futures-lite",
+ "futures-util",
+ "pin-project-lite",
+ "zlink-core",
+]
+
+[[package]]
+name = "zlink-tokio"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ab6f490a817bcbbc67d82b22427f1fafd9764da04a6b9499cf73e7ef68f4482"
+dependencies = [
+ "futures-util",
+ "tokio",
+ "tokio-stream",
+ "zlink-core",
 ]
 
 [[package]]
