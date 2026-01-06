@@ -1,12 +1,13 @@
 use api::httpsig::ReqwestSig as _;
 use http::StatusCode;
 use httpsig_hyper::prelude::*;
-use rootcause::{
-    IntoReport, Report, compat::boxed_error::IntoBoxedError, prelude::ResultExt, report,
-};
+use rootcause::{IntoReport,
+                Report,
+                compat::boxed_error::IntoBoxedError,
+                prelude::ResultExt,
+                report};
 use serde::de::DeserializeOwned;
-use std::error::Error;
-use std::sync::LazyLock;
+use std::{error::Error, sync::LazyLock};
 use url::Url;
 
 use reqwest::{Client, Response};

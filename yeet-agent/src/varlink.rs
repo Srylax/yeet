@@ -1,9 +1,13 @@
 use rootcause::{IntoReport, Report};
 use serde::{Deserialize, Serialize};
 use tokio::fs::remove_file;
-use zlink::{
-    Call, Connection, ReplyError, Service, connection::Socket, service::MethodReply, unix,
-};
+use zlink::{Call,
+            Connection,
+            ReplyError,
+            Service,
+            connection::Socket,
+            service::MethodReply,
+            unix};
 
 const SOCKET_PATH: &str = "/run/yeet/agent.varlink";
 

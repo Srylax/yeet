@@ -1,10 +1,9 @@
-use std::io::Write as _;
-
 use api::hash_hex;
 use console::style;
 use jiff::{SpanRound, Unit, Zoned};
 use rootcause::Report;
 use similar::{ChangeTag, DiffOp, TextDiff};
+use std::io::Write as _;
 
 // pub trait Fragment {
 //     fn fragment(&self, fragment: &mut IndexMap<String, String>);

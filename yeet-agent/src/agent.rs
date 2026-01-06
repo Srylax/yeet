@@ -1,24 +1,22 @@
+use crate::{cli::Config, varlink, version::get_active_version};
 use api::key::{get_secret_key, get_verify_key};
 use backon::{ConstantBuilder, Retryable as _};
 use ed25519_dalek::VerifyingKey;
 use httpsig_hyper::prelude::SecretKey;
-use rootcause::prelude::ResultExt as _;
-use rootcause::{Report, bail, report};
-use std::io::{self, BufRead as _, BufReader, Write};
-use std::path::Path;
-use std::sync::OnceLock;
-use std::time::Duration;
-use std::{fs::File, process::Command};
+use log::{error, info};
+use notify_rust::Notification;
+use rootcause::{Report, bail, prelude::ResultExt as _, report};
+use std::{
+    fs::File,
+    io::{self, BufRead as _, BufReader, Write},
+    path::Path,
+    process::Command,
+    sync::OnceLock,
+    time::Duration,
+};
 use tempfile::NamedTempFile;
 use tokio::time;
 use yeet::{nix, server};
-
-use log::{error, info};
-use notify_rust::Notification;
-
-use crate::cli::Config;
-use crate::varlink;
-use crate::version::get_active_version;
 
 static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 

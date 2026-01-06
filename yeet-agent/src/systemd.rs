@@ -1,6 +1,5 @@
-use std::process::{Command, Stdio};
-
 use rootcause::{Report, prelude::ResultExt as _};
+use std::process::{Command, Stdio};
 
 pub fn systemd_status_value(
     value: impl AsRef<str>,

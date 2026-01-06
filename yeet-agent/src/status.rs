@@ -1,18 +1,16 @@
-use std::{fmt::Display, path::Path};
-
+use crate::{
+    section::{self, DisplaySection, Section, section},
+    systemd, version,
+};
 use api::{AgentAction, key::get_secret_key};
 use console::style;
 use httpsig_hyper::prelude::SecretKey;
 use jiff::tz::TimeZone;
 use rootcause::{Report, prelude::ResultExt};
 use serde::{Deserialize, Serialize};
+use std::{fmt::Display, path::Path};
 use url::Url;
 use yeet::{display, nix, server};
-
-use crate::{
-    section::{self, DisplaySection, Section, section},
-    systemd, version,
-};
 
 shadow_rs::shadow!(build);
 

@@ -1,18 +1,16 @@
+use crate::{
+    cli::{AuthLevel, Config, ServerCommands},
+    status::status_string,
+};
+use api::key::{get_secret_key, get_verify_key};
+use log::info;
+use rootcause::{Report, prelude::ResultExt as _};
 use std::{
     collections::HashMap,
     fs::{File, read_to_string},
     io::Write,
 };
-
-use api::key::{get_secret_key, get_verify_key};
-use log::info;
-use rootcause::{Report, prelude::ResultExt as _};
 use yeet::{display::diff_inline, server};
-
-use crate::{
-    cli::{AuthLevel, Config, ServerCommands},
-    status::status_string,
-};
 
 pub async fn handle_server_commands(
     command: ServerCommands,

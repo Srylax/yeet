@@ -1,10 +1,8 @@
-use std::{
-    collections::HashMap,
-    fs::{read_to_string, remove_file},
-    io,
-    path::Path,
-    process::{Command, Stdio},
-};
+use std::{collections::HashMap,
+          fs::{read_to_string, remove_file},
+          io,
+          path::Path,
+          process::{Command, Stdio}};
 
 use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use serde::{Deserialize, Serialize};
