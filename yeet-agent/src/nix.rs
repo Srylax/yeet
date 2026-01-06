@@ -7,6 +7,7 @@ use std::{
 };
 
 use rootcause::{Report, bail, prelude::ResultExt as _, report};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 // This command is used to run the virtual machine of a particular system
@@ -104,6 +105,25 @@ pub fn list_hosts(flake_path: &str, darwin: bool) -> Result<Vec<String>, Report>
         ])
         .stdout(Stdio::piped())
         .spawn()?
+        .wait_with_output()?;
+
+    Ok(serde_json::from_slice(&output.stdout)?)
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NixOSVersion {
+    pub configuration_revision: String,
+    pub nixos_version: String,
+    pub nixpkgs_revision: String,
+}
+
+pub fn nixos_version() -> Result<NixOSVersion, Report> {
+    let output = Command::new("nixos-version")
+        .arg("--json")
+        .stdout(Stdio::piped())
+        .spawn()
+        .context("Could not spawn `nixos-version`")?
         .wait_with_output()?;
 
     Ok(serde_json::from_slice(&output.stdout)?)

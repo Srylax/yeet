@@ -98,7 +98,8 @@ pub enum Commands {
         darwin: bool,
     },
 
-    /// Query the status of all or some (TODO) hosts [requires Admin credentials]
+    /// Query the status of all or your local hosts
+    /// Requires either admin credentials or sudo
     Status,
 
     /// Run you hosts inside a vm

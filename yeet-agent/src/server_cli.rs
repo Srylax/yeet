@@ -11,7 +11,7 @@ use yeet::{display::diff_inline, server};
 
 use crate::{
     cli::{AuthLevel, Config, ServerCommands},
-    status_string,
+    status::status_string,
 };
 
 pub async fn handle_server_commands(

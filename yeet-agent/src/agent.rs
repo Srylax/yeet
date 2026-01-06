@@ -8,10 +8,7 @@ use std::io::{self, BufRead as _, BufReader, Write};
 use std::path::Path;
 use std::sync::OnceLock;
 use std::time::Duration;
-use std::{
-    fs::{File, read_link},
-    process::Command,
-};
+use std::{fs::File, process::Command};
 use tempfile::NamedTempFile;
 use tokio::time;
 use yeet::{nix, server};
@@ -20,6 +17,7 @@ use log::{error, info};
 use notify_rust::Notification;
 
 use crate::cli::Config;
+use crate::version::get_active_version;
 
 static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 
@@ -111,13 +109,6 @@ fn agent_action(action: api::AgentAction) -> Result<(), Report> {
         api::AgentAction::SwitchTo(remote_store_path) => update(&remote_store_path)?,
     }
     Ok(())
-}
-
-fn get_active_version() -> Result<String, Report> {
-    Ok(read_link("/run/current-system")
-        .context("Current system has no `/run/current-system`")?
-        .to_string_lossy()
-        .to_string())
 }
 
 fn trusted_public_keys() -> Result<Vec<String>, Report> {

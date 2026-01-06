@@ -1,26 +1,30 @@
 //! # Yeet Agent
 
+use std::fmt::Debug;
 use std::fs::read_to_string;
-use std::path::Path;
 
 use api::key::get_secret_key;
 use clap::Parser as _;
+use console::style;
 use figment::Figment;
 use figment::providers::{Env, Format as _, Serialized, Toml};
 use log::info;
 use rootcause::hooks::Hooks;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, bail, report};
-use url::Url;
 use yeet::display::diff_inline;
 use yeet::nix::{self, run_vm};
-use yeet::{cachix, display, server};
+use yeet::{cachix, server};
 
 use crate::cli::{Commands, Config, Yeet};
+use crate::status::status_string;
+use std::io::{IsTerminal, Write};
 
 mod agent;
 mod cli;
 mod server_cli;
+mod status;
+mod version;
 
 #[tokio::main]
 #[expect(clippy::too_many_lines)]
@@ -31,7 +35,18 @@ async fn main() -> Result<(), Report> {
         .install()
         .expect("failed to install hooks");
 
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let mut log_builder =
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
+
+    if std::io::stderr().is_terminal() {
+        log_builder.format(|buf, record| {
+            write!(buf, "{}", buf.default_level_style(record.level()))?;
+            write!(buf, "{}", record.level())?;
+            write!(buf, "{:#}", buf.default_level_style(record.level()))?;
+            writeln!(buf, ": {}", record.args())
+        });
+    }
+    log_builder.init();
     let xdg_dirs = xdg::BaseDirectories::with_prefix("yeet");
     let args = Yeet::try_parse()?;
     let config: Config = Figment::new()
@@ -53,12 +68,13 @@ async fn main() -> Result<(), Report> {
             agent::agent(&config, sleep, facter).await?;
         }
         Commands::Status => {
-            info!(
-                "{}",
-                status_string(&config.url, &config.httpsig_key)
-                    .await
-                    .context("Failed to get status")?
-            );
+            status::local_status(&config.url, &config.httpsig_key).await?;
+            // info!(
+            //     "{}",
+            //     status_string(&config.url, &config.httpsig_key)
+            //         .await
+            //         .context("Failed to get status")?
+            // );
         }
         Commands::Publish {
             path,
@@ -122,14 +138,4 @@ async fn main() -> Result<(), Report> {
         Commands::Server(args) => server_cli::handle_server_commands(args.command, &config).await?,
     }
     Ok(())
-}
-
-pub(crate) async fn status_string(url: &Url, httpsig_key: &Path) -> Result<String, Report> {
-    let status = server::status(url, &get_secret_key(httpsig_key)?).await?;
-    let rows = status
-        .into_iter()
-        .map(|host| display::host(&host))
-        .collect::<Result<Vec<_>, Report>>()?;
-
-    Ok(rows.join("\n"))
 }
