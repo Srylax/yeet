@@ -58,6 +58,7 @@ in
         KillMode = "process";
         Restart = "always";
         RestartSec = 5;
+        RuntimeDirectory = "yeet";
         ExecStart = ''
           ${lib.getExe cfg.package} agent --sleep ${toString cfg.sleep} --url ${cfg.url} --httpsig-key ${cfg.httpsigKey} ${lib.optionalString cfg.facter "--facter"}
         '';
