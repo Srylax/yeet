@@ -99,16 +99,19 @@ impl Service for YeetVarlinkService {
 
 impl YeetVarlinkService {
     pub async fn start() -> Result<(), Report> {
-        let service = Self;
-        let _ = remove_file(SOCKET_PATH).await;
-        fs::create_dir_all(Path::new(SOCKET_PATH).parent().unwrap())
-            .await
-            .context("Ensuring the Socket dir is available")?;
-        let listener = unix::bind(SOCKET_PATH).attach(format!("SOCKET_PATH: {SOCKET_PATH}"))?;
+        let listener = {
+            let _ = remove_file(SOCKET_PATH).await;
+            fs::create_dir_all(Path::new(SOCKET_PATH).parent().unwrap())
+                .await
+                .context("Ensuring the Socket dir is available")?;
+            let listener = unix::bind(SOCKET_PATH).attach(format!("SOCKET_PATH: {SOCKET_PATH}"))?;
+            setup_socket_permissions(SOCKET_PATH, "yeet").await?;
+            listener
+        };
+
         log::debug!("Socket created at {SOCKET_PATH}");
-        let server = zlink::Server::new(listener, service);
+        let server = zlink::Server::new(listener, Self);
         log::info!("Listening for varlink connections");
-        setup_socket_permissions(SOCKET_PATH, "yeet").await?;
         server.run().await.map_err(std::convert::Into::into)
     }
 }

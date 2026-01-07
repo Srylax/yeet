@@ -99,11 +99,8 @@ impl DisplaySection for YeetInfo {
 }
 
 async fn yeet_info(url: &Url, key: &SecretKey, local: bool) -> Result<YeetInfo, Report> {
-    let mode;
-    let up_to_date;
-    if local {
-        mode = YeetClientMode::Unknown;
-        up_to_date = UpToDate::Unknown;
+    let (mode, up_to_date) = if local {
+        (YeetClientMode::Unknown, UpToDate::Unknown)
     } else {
         let remote_state = server::system_check(
             url,
@@ -114,26 +111,27 @@ async fn yeet_info(url: &Url, key: &SecretKey, local: bool) -> Result<YeetInfo, 
         )
         .await;
         if let Err(err) = &remote_state {
-            println!("{err}");
+            log::error!("{err}");
             log::error!(
                 "Could not retrieve remote state. If you want to only display local consider using `--local`"
             );
         }
 
-        up_to_date = match &remote_state {
+        let up_to_date = match &remote_state {
             Ok(AgentAction::Nothing) => UpToDate::Yes,
             Ok(AgentAction::Detach) => UpToDate::Detached,
             Ok(AgentAction::SwitchTo(store)) => UpToDate::No(store.store_path.clone()),
             Err(_) => UpToDate::Unknown,
         };
 
-        mode = match &remote_state {
+        let mode = match &remote_state {
             Ok(AgentAction::Nothing) => YeetClientMode::Provisioned,
             Ok(AgentAction::SwitchTo(_)) => YeetClientMode::Provisioned,
             Ok(AgentAction::Detach) => YeetClientMode::Detached,
             Err(_) => YeetClientMode::Unknown,
         };
-    }
+        (mode, up_to_date)
+    };
 
     Ok(YeetInfo {
         up_to_date,
@@ -159,20 +157,21 @@ struct SystemInfo {
 
 impl DisplaySection for SystemInfo {
     fn as_section(&self) -> Section {
-        let zoned = self.build_date.to_zoned(TimeZone::system()).unwrap();
+        let build_date_span = {
+            let zoned = self.build_date.to_zoned(TimeZone::system()).unwrap();
+            let last_build = (&zoned - &jiff::Zoned::now())
+                .round(
+                    jiff::SpanRound::new()
+                        .smallest(jiff::Unit::Minute)
+                        .mode(jiff::RoundMode::Trunc),
+                )
+                .unwrap();
 
-        let last_switch = (&zoned - &jiff::Zoned::now())
-            .round(
-                jiff::SpanRound::new()
-                    .smallest(jiff::Unit::Minute)
-                    .mode(jiff::RoundMode::Trunc),
-            )
-            .unwrap();
-
-        let last_switch = if last_switch.total(jiff::Unit::Hour).unwrap() < 24_f64 {
-            style(last_switch).green().bold()
-        } else {
-            style(last_switch).red().bold()
+            if last_build.total(jiff::Unit::Hour).unwrap() < 24_f64 {
+                style(last_build).green().bold()
+            } else {
+                style(last_build).red().bold()
+            }
         };
 
         let os_version = if self.nixos_version.starts_with("dirty") {
@@ -185,7 +184,7 @@ impl DisplaySection for SystemInfo {
             style("System:").underlined() => [
                 "Kernel", self.kernel,
                 "NixOS version", format!("{} Generation {}", os_version, style(self.current_generation).bold()),
-                "Build date", format!("\u{2514}\u{2500}{}; {:#} ago",self.build_date, last_switch),
+                "Build date", format!("\u{2514}\u{2500}{}; {:#} ago",self.build_date, build_date_span),
                 "Variant", style(&self.variant).bold(),
                 "Conf revision", self.configuration_revision[..8],
                 "Nixpkgs version", self.nixpkgs_revision[..8],
@@ -219,11 +218,13 @@ async fn server_status(url: &Url, httpsig_key: &Path) -> Result<Vec<api::Host>, 
 }
 
 pub(crate) async fn status_string(url: &Url, httpsig_key: &Path) -> Result<String, Report> {
-    let status = server_status(url, httpsig_key).await?;
-    let rows = status
-        .into_iter()
-        .map(|host| display::host(&host))
-        .collect::<Result<Vec<_>, Report>>()?;
+    let rows = {
+        let status = server_status(url, httpsig_key).await?;
+        status
+            .into_iter()
+            .map(|host| display::host(&host))
+            .collect::<Result<Vec<_>, Report>>()?
+    };
 
     Ok(rows.join("\n"))
 }
