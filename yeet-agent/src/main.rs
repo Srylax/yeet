@@ -76,27 +76,23 @@ async fn main() -> Result<(), Report> {
         Commands::Agent { sleep, facter } => {
             agent::agent(&config, sleep, facter).await?;
         }
-        Commands::Status { json, local } => {
-            status::status(
-                &config.url,
-                &get_secret_key(&config.httpsig_key)?,
-                json,
-                local,
-            )
-            .await?;
-            // info!(
-            //     "{}",
-            //     status_string(&config.url, &config.httpsig_key)
-            //         .await
-            //         .context("Failed to get status")?
-            // );
-        }
+        Commands::Status { json } => status::status(json).await?,
         Commands::Publish {
             path,
             host,
             darwin,
             netrc,
         } => {
+            let url = &config
+                .url
+                .clone()
+                .ok_or(rootcause::report!("`--url` required for publish"))?;
+
+            let httpsig_key = &config
+                .httpsig_key
+                .clone()
+                .ok_or(rootcause::report!("`--httpsig_key` required for publish"))?;
+
             let cachix = config.cachix.clone().ok_or(report!(
                 "Cachix cache name required. Set it in config or via the --cachix flag"
             ))?;
@@ -135,10 +131,10 @@ async fn main() -> Result<(), Report> {
 
             cachix::push_paths(hosts.values(), &cachix).await?;
 
-            let before = status_string(&config.url, &config.httpsig_key).await?;
+            let before = status_string(&url, &httpsig_key).await?;
             server::update(
-                &config.url,
-                &get_secret_key(&config.httpsig_key)?,
+                &url,
+                &get_secret_key(&httpsig_key)?,
                 &api::HostUpdateRequest {
                     hosts,
                     public_key,
@@ -147,7 +143,7 @@ async fn main() -> Result<(), Report> {
                 },
             )
             .await?;
-            let after = status_string(&config.url, &config.httpsig_key).await?;
+            let after = status_string(&url, &httpsig_key).await?;
             info!("{}", diff_inline(&before, &after));
         }
         Commands::Server(args) => server_cli::handle_server_commands(args.command, &config).await?,

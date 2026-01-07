@@ -1,19 +1,31 @@
-use std::{collections::HashMap,
-          fs::{File, read_to_string},
-          io::Write as _};
+use std::{
+    collections::HashMap,
+    fs::{File, read_to_string},
+    io::Write as _,
+};
 
 use api::key::{get_secret_key, get_verify_key};
 use log::info;
 use rootcause::{Report, prelude::ResultExt as _};
 use yeet::{display::diff_inline, server};
 
-use crate::{cli::{AuthLevel, Config, ServerCommands},
-            status::status_string};
+use crate::{
+    cli::{AuthLevel, Config, ServerCommands},
+    status::status_string,
+};
 
 pub async fn handle_server_commands(
     command: ServerCommands,
     config: &Config,
 ) -> Result<(), Report> {
+    let url = &config
+        .url
+        .clone()
+        .ok_or(rootcause::report!("`--url` required for server commands"))?;
+
+    let httpsig_key = &config.httpsig_key.clone().ok_or(rootcause::report!(
+        "`--httpsig_key` required for server commands"
+    ))?;
     match command {
         ServerCommands::Register {
             store_path,
@@ -22,7 +34,7 @@ pub async fn handle_server_commands(
             substitutor,
             netrc,
         } => {
-            let before = status_string(&config.url, &config.httpsig_key).await?;
+            let before = status_string(&url, &httpsig_key).await?;
 
             let provision_state = if let Some(store_path) = store_path
                 && let Some(public_key) = public_key
@@ -39,15 +51,15 @@ pub async fn handle_server_commands(
             };
 
             server::register(
-                &config.url,
-                &get_secret_key(&config.httpsig_key)?,
+                &url,
+                &get_secret_key(&httpsig_key)?,
                 &api::RegisterHost {
                     provision_state,
                     name,
                 },
             )
             .await?;
-            let after = status_string(&config.url, &config.httpsig_key).await?;
+            let after = status_string(&url, &httpsig_key).await?;
             info!("{}", diff_inline(&before, &after));
         }
         ServerCommands::Update {
@@ -66,8 +78,8 @@ pub async fn handle_server_commands(
                 None => None,
             };
             server::update(
-                &config.url,
-                &get_secret_key(&config.httpsig_key)?,
+                &url,
+                &get_secret_key(&httpsig_key)?,
                 &api::HostUpdateRequest {
                     hosts: HashMap::from([(host, store_path)]),
                     public_key,
@@ -78,9 +90,7 @@ pub async fn handle_server_commands(
             .await?;
         }
         ServerCommands::VerifyStatus => {
-            let status =
-                server::is_host_verified(&config.url, &get_secret_key(&config.httpsig_key)?)
-                    .await?;
+            let status = server::is_host_verified(&url, &get_secret_key(&httpsig_key)?).await?;
             info!("{status}");
         }
         ServerCommands::AddVerification {
@@ -95,7 +105,7 @@ pub async fn handle_server_commands(
             };
 
             let code = server::add_verification_attempt(
-                &config.url,
+                &url,
                 &api::VerificationAttempt {
                     store_path,
                     key: get_verify_key(&public_key)?,
@@ -107,8 +117,8 @@ pub async fn handle_server_commands(
         }
         ServerCommands::VerifyAttempt { name, code, facter } => {
             let artifacts = server::verify_attempt(
-                &config.url,
-                &get_secret_key(&config.httpsig_key)?,
+                &url,
+                &get_secret_key(&httpsig_key)?,
                 &api::VerificationAcceptance {
                     code,
                     host_name: name,
@@ -127,8 +137,8 @@ pub async fn handle_server_commands(
                 api::AuthLevel::Build
             };
             let status = server::add_key(
-                &config.url,
-                &get_secret_key(&config.httpsig_key)?,
+                &url,
+                &get_secret_key(&httpsig_key)?,
                 &api::AddKey {
                     key: get_verify_key(&key)?,
                     level,
@@ -138,12 +148,9 @@ pub async fn handle_server_commands(
             info!("{status}");
         }
         ServerCommands::RemoveKey { key } => {
-            let status = server::remove_key(
-                &config.url,
-                &get_secret_key(&config.httpsig_key)?,
-                &get_verify_key(&key)?,
-            )
-            .await?;
+            let status =
+                server::remove_key(&url, &get_secret_key(&httpsig_key)?, &get_verify_key(&key)?)
+                    .await?;
             info!("{status}");
         }
     }

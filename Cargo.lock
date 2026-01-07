@@ -4305,6 +4305,7 @@ dependencies = [
  "similar",
  "ssh-key",
  "tempfile",
+ "thiserror 2.0.17",
  "tokio",
  "url",
  "xdg",

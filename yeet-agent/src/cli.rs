@@ -41,10 +41,10 @@ pub struct ClapConfig {
     pub cachix_key: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
-    pub url: Url,
-    pub httpsig_key: PathBuf,
+    pub url: Option<Url>, // TODO
+    pub httpsig_key: Option<PathBuf>,
     pub cachix: Option<String>,
     pub cachix_key: Option<String>,
 }
@@ -106,10 +106,7 @@ pub enum Commands {
     /// Query the status of all or your local hosts
     /// Requires either admin credentials or sudo
     Status {
-        /// Do not attempt to fetch the yeet status
-        #[arg(long)]
-        local: bool,
-        /// Instead of printing output everything as json
+        /// Instead of printing, output everything as json
         #[arg(long)]
         json: bool,
     },

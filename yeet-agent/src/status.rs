@@ -1,8 +1,7 @@
 use std::{fmt::Display, path::Path};
 
-use api::{AgentAction, key::get_secret_key};
+use api::key::get_secret_key;
 use console::style;
-use httpsig_hyper::prelude::SecretKey;
 use jiff::tz::TimeZone;
 use rootcause::{Report, prelude::ResultExt as _};
 use serde::{Deserialize, Serialize};
@@ -10,25 +9,21 @@ use url::Url;
 use yeet::{display, nix, server};
 
 use crate::{
-    section::{DisplaySection, Section, section},
+    section::{self, DisplaySection, Section, section},
     systemd,
-    varlink::{self, YeetProxy},
-    version,
+    varlink::{self},
 };
 
 shadow_rs::shadow!(build);
 
-pub async fn status(url: &Url, key: &SecretKey, json: bool, local: bool) -> Result<(), Report> {
-    let a = varlink::client().await?.status().await?;
-    println!("{a:?}");
-
-    // let yeet = yeet_info(url, key, local).await?;
-    // let system = system_info()?;
-    // if json {
-    //     println!("{}", serde_json::to_string(&Status { system, yeet })?);
-    // } else {
-    //     section::print_sections(&[yeet.as_section(), system.as_section()]);
-    // }
+pub async fn status(json: bool) -> Result<(), Report> {
+    let yeet = yeet_info().await?;
+    let system = system_info()?;
+    if json {
+        println!("{}", serde_json::to_string(&Status { system, yeet })?);
+    } else {
+        section::print_sections(&[yeet.as_section(), system.as_section()]);
+    }
     Ok(())
 }
 
@@ -40,46 +35,30 @@ struct Status {
 
 #[derive(Serialize, Deserialize)]
 struct YeetInfo {
-    pub up_to_date: UpToDate,
-    pub server: url::Url,
-    pub mode: YeetClientMode,
-    pub version_short: String,
-    pub version_long: String,
-    pub daemon_status: String,
+    pub systemd_status: String,
+    pub daemon_status: Option<varlink::DaemonStatus>,
+    pub cli_version_short: String,
+    pub cli_version_long: String,
 }
 
-#[derive(Serialize, Deserialize)]
-enum YeetClientMode {
-    Provisioned,
-    Detached,
-    Unknown,
-}
-
-impl Display for YeetClientMode {
+impl Display for varlink::DaemonMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mode = match &self {
-            YeetClientMode::Provisioned => style("Provisioned").green().bold(),
-            YeetClientMode::Detached => style("Detached").yellow().bold(),
-            YeetClientMode::Unknown => style("Unknown").red().bold(),
+            Self::Provisioned => style("Provisioned").green().bold(),
+            Self::Detached => style("Detached").yellow().bold(),
+            Self::NetworkError => style("NetworkError").red().bold(),
+            Self::Unverified => style("Unverified").red().bold(),
         };
         write!(f, "{mode}")
     }
 }
 
-#[derive(Serialize, Deserialize)]
-enum UpToDate {
-    Yes,
-    No(api::StorePath),
-    Detached,
-    Unknown,
-}
-impl Display for UpToDate {
+impl Display for varlink::UpToDate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let up_to_date = match &self {
-            UpToDate::Yes => style("Yes").green().bold(),
-            UpToDate::No(_) => style("No").red().bold(),
-            UpToDate::Detached => style("Detached").yellow().bold(),
-            UpToDate::Unknown => style("Unknown").red().bold(),
+            Self::Yes => style("Yes").green().bold(),
+            Self::No => style("No").red().bold(),
+            Self::Detached => style("Detached").yellow().bold(),
         };
         write!(f, "{up_to_date}")
     }
@@ -87,59 +66,54 @@ impl Display for UpToDate {
 
 impl DisplaySection for YeetInfo {
     fn as_section(&self) -> Section {
+        let (up_to_date, mode, daemon_version) = match &self.daemon_status {
+            Some(daemon_state) => {
+                let up_to_date = daemon_state.up_to_date.to_string();
+                let mode = format!(
+                    "{} ({})",
+                    daemon_state.mode,
+                    style(daemon_state.server.to_string()).underlined()
+                );
+                (up_to_date, mode, daemon_state.version.clone())
+            }
+            None => {
+                let no_con = style("No connection to daemon").red().bold().to_string();
+                (no_con.clone(), no_con.clone(), no_con)
+            }
+        };
+
+        let daemon_version = if daemon_version != self.cli_version_short {
+            style(daemon_version).red().bold()
+        } else {
+            style(daemon_version)
+        };
+
         section!(
             style("Yeet:").underlined() => [
-                "Up to date", self.up_to_date,
-                "Mode", format!("{} ({})", self.mode, style(&self.server).underlined()),
-                "Daemon", self.daemon_status,
-                "Version", format!("{}", self.version_long),
+                "Up to date", up_to_date,
+                "Mode", mode,
+                "Systemd Unit", self.systemd_status,
+                "Daemon version", daemon_version,
+                "CLI Version", format!("{}", self.cli_version_long),
             ]
         )
     }
 }
 
-async fn yeet_info(url: &Url, key: &SecretKey, local: bool) -> Result<YeetInfo, Report> {
-    let (mode, up_to_date) = if local {
-        (YeetClientMode::Unknown, UpToDate::Unknown)
-    } else {
-        let remote_state = server::system_check(
-            url,
-            key,
-            &api::VersionRequest {
-                store_path: version::get_active_version()?,
-            },
-        )
-        .await;
-        if let Err(err) = &remote_state {
-            log::error!("{err}");
-            log::error!(
-                "Could not retrieve remote state. If you want to only display local consider using `--local`"
-            );
+async fn yeet_info() -> Result<YeetInfo, Report> {
+    let daemon_status = match varlink::status().await {
+        Ok(status) => Some(status),
+        Err(err) => {
+            log::error!("Could not get status from daemon:\n{err}");
+            None
         }
-
-        let up_to_date = match &remote_state {
-            Ok(AgentAction::Nothing) => UpToDate::Yes,
-            Ok(AgentAction::Detach) => UpToDate::Detached,
-            Ok(AgentAction::SwitchTo(store)) => UpToDate::No(store.store_path.clone()),
-            Err(_) => UpToDate::Unknown,
-        };
-
-        let mode = match &remote_state {
-            Ok(AgentAction::Nothing) => YeetClientMode::Provisioned,
-            Ok(AgentAction::SwitchTo(_)) => YeetClientMode::Provisioned,
-            Ok(AgentAction::Detach) => YeetClientMode::Detached,
-            Err(_) => YeetClientMode::Unknown,
-        };
-        (mode, up_to_date)
     };
 
     Ok(YeetInfo {
-        up_to_date,
-        server: url.clone(),
-        mode,
-        version_short: String::from(build::PKG_VERSION),
-        version_long: String::from(build::CLAP_LONG_VERSION),
-        daemon_status: systemd::systemd_status_value("Active", "yeet")?
+        cli_version_short: String::from(build::PKG_VERSION),
+        cli_version_long: String::from(build::CLAP_LONG_VERSION),
+        daemon_status: daemon_status,
+        systemd_status: systemd::systemd_status_value("Active", "yeet")?
             .unwrap_or("Service health not found".to_owned()),
     })
 }
@@ -180,12 +154,18 @@ impl DisplaySection for SystemInfo {
             style(&self.nixos_version).green()
         };
 
+        let variant = if self.variant.starts_with("dirty") {
+            style(&self.variant).red().bold()
+        } else {
+            style(&self.variant).bold()
+        };
+
         section!(
             style("System:").underlined() => [
                 "Kernel", self.kernel,
                 "NixOS version", format!("{} Generation {}", os_version, style(self.current_generation).bold()),
                 "Build date", format!("\u{2514}\u{2500}{}; {:#} ago",self.build_date, build_date_span),
-                "Variant", style(&self.variant).bold(),
+                "Variant", variant,
                 "Conf revision", self.configuration_revision[..8],
                 "Nixpkgs version", self.nixpkgs_revision[..8],
             ]

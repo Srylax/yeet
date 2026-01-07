@@ -3,13 +3,21 @@ use std::{
     path::Path,
 };
 
+use api::AgentAction;
+use httpsig_hyper::prelude::SecretKey;
 use nix::unistd::Group;
-use rootcause::{Report, prelude::ResultExt};
+use rootcause::{Report, compat::ReportAsError, prelude::ResultExt};
 use serde::{Deserialize, Serialize};
 use tokio::fs::{self, remove_file};
+use url::Url;
+use yeet::server;
 use zlink::{
     Call, Connection, ReplyError, Service, connection::Socket, proxy, service::MethodReply, unix,
 };
+
+shadow_rs::shadow!(build);
+
+use crate::{cli, version};
 
 const SOCKET_PATH: &str = "/run/yeet/agent.varlink";
 
@@ -25,6 +33,32 @@ pub trait YeetProxy {
     async fn status(&mut self) -> zlink::Result<Result<DaemonStatus, YeetDaemonError>>;
 }
 
+pub async fn client() -> Result<Connection<zlink::unix::Stream>, Error> {
+    log::debug!("Connecting to {SOCKET_PATH}");
+    Ok(unix::connect(SOCKET_PATH)
+        .await
+        .context("Trying to set up the varlink connection\nMake sure you are in the `yeet` group and the daemon is running")
+        .map_err(ReportAsError::from)?)
+}
+
+pub async fn status() -> Result<DaemonStatus, Error> {
+    let mut client = client().await?;
+    client
+        .status()
+        .await
+        .context("Could not communicate with the varlink daemon")
+        .map_err(ReportAsError::from)?
+        .map_err(|e| Error::DaemonError(e))
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error(transparent)]
+    Report(#[from] ReportAsError<&'static str>),
+    #[error("Defined error from Daemon:\n{0:?}")]
+    DaemonError(YeetDaemonError),
+}
+
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum YeetReply {
@@ -34,13 +68,12 @@ pub enum YeetReply {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DaemonStatus {
     pub up_to_date: UpToDate,
-    pub server: String,
-    pub mode: YeetDaemonMode,
+    pub server: Url,
+    pub mode: DaemonMode,
     pub version: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[expect(dead_code)]
 pub enum UpToDate {
     Yes,
     No,
@@ -48,25 +81,23 @@ pub enum UpToDate {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[expect(dead_code)]
-pub enum YeetDaemonMode {
+pub enum DaemonMode {
     Provisioned,
+    Unverified,
     Detached,
-    Unknown,
-}
-
-pub async fn client() -> Result<Connection<zlink::unix::Stream>, Report> {
-    log::debug!("Connecting to {SOCKET_PATH}");
-    Ok(unix::connect(SOCKET_PATH)
-        .await
-        .context("Trying to set up varlink connection. Make sure you are in the `yeet` group")?)
+    NetworkError,
 }
 
 #[derive(Debug, ReplyError)]
 #[zlink(interface = "ch.yeetme.yeet")]
-pub enum YeetDaemonError {}
+pub enum YeetDaemonError {
+    NoCurrentSystem,
+}
 
-pub struct YeetVarlinkService;
+pub struct YeetVarlinkService {
+    config: cli::Config,
+    key: SecretKey,
+}
 
 impl Service for YeetVarlinkService {
     type MethodCall<'de> = YeetMethod;
@@ -86,11 +117,54 @@ impl Service for YeetVarlinkService {
         match method.method() {
             YeetMethod::Status => {
                 log::debug!("Varlink: Daemon status requested");
+
+                let verified =
+                    //TODO unwrap
+                    match server::is_host_verified(&self.config.url.as_ref().unwrap(), &self.key).await {
+                        Ok(verified) => Some(verified.is_success()),
+                        Err(_) => None,
+                    };
+
+                let system_check = {
+                    let Ok(store_path) = version::get_active_version() else {
+                        return MethodReply::Error(YeetDaemonError::NoCurrentSystem);
+                    };
+
+                    server::system_check(
+                        self.config.url.as_ref().unwrap(), //TODO unwrap
+                        &self.key,
+                        &api::VersionRequest { store_path },
+                    )
+                    .await
+                };
+
+                let up_to_date = match system_check {
+                    Ok(AgentAction::Nothing) => UpToDate::Yes,
+                    Ok(AgentAction::Detach) => UpToDate::Detached,
+                    Ok(AgentAction::SwitchTo(_)) | Err(_) => UpToDate::No,
+                };
+
+                let mode = 'b: {
+                    if let Some(verified) = verified
+                        && !verified
+                    {
+                        break 'b DaemonMode::Unverified;
+                    }
+
+                    match system_check {
+                        Ok(AgentAction::Nothing) | Ok(AgentAction::SwitchTo(_)) => {
+                            DaemonMode::Provisioned
+                        }
+                        Ok(AgentAction::Detach) => DaemonMode::Detached,
+                        Err(_) => DaemonMode::NetworkError,
+                    }
+                };
+
                 MethodReply::Single(Some(YeetReply::Status(DaemonStatus {
-                    up_to_date: UpToDate::Yes,
-                    server: "heloooooo".to_owned(),
-                    mode: YeetDaemonMode::Provisioned,
-                    version: "Wouldn't you like to know weather boy".to_owned(),
+                    up_to_date,
+                    server: self.config.url.clone().unwrap(), //TODO unwrap
+                    mode,
+                    version: String::from(build::PKG_VERSION),
                 })))
             }
         }
@@ -98,7 +172,7 @@ impl Service for YeetVarlinkService {
 }
 
 impl YeetVarlinkService {
-    pub async fn start() -> Result<(), Report> {
+    pub async fn start(config: cli::Config, key: SecretKey) -> Result<(), Report> {
         let listener = {
             let _ = remove_file(SOCKET_PATH).await;
             fs::create_dir_all(Path::new(SOCKET_PATH).parent().unwrap())
@@ -110,7 +184,7 @@ impl YeetVarlinkService {
         };
 
         log::debug!("Socket created at {SOCKET_PATH}");
-        let server = zlink::Server::new(listener, Self);
+        let server = zlink::Server::new(listener, Self { config, key });
         log::info!("Listening for varlink connections");
         server.run().await.map_err(std::convert::Into::into)
     }

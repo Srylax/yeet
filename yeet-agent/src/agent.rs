@@ -29,15 +29,29 @@ static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 ///         pull the verify endpoint in a time intervall
 /// 2. Continuosly pull the system endpoint and execute based on the provided
 pub async fn agent(config: &Config, sleep: u64, facter: bool) -> Result<(), Report> {
-    let key = get_secret_key(&config.httpsig_key)?;
-    let pub_key = get_verify_key(&config.httpsig_key)?;
+    let _ = &config
+        .url
+        .clone()
+        .ok_or(rootcause::report!("`url` required for agent"))?;
+
+    let _ = &config
+        .httpsig_key
+        .clone()
+        .ok_or(rootcause::report!("`httpsig_key` required for agent"))?;
+
+    let key = get_secret_key(config.httpsig_key.as_ref().unwrap())?;
+    let pub_key = get_verify_key(config.httpsig_key.as_ref().unwrap())?;
 
     log::info!("Spawning varlink daemon");
-    tokio::task::spawn_local(async {
-        if let Err(err) = varlink::YeetVarlinkService::start().await {
-            log::error!("Varlink failure:\n{err}");
-        }
-    });
+    {
+        let config = config.clone();
+        let key = key.clone();
+        tokio::task::spawn_local(async move {
+            if let Err(err) = varlink::YeetVarlinkService::start(config, key).await {
+                log::error!("Varlink failure:\n{err}");
+            }
+        });
+    }
 
     (|| async { agent_loop(config, &key, pub_key, sleep, facter).await })
         .retry(
@@ -60,7 +74,7 @@ async fn agent_loop(
     sleep: u64,
     facter: bool,
 ) -> Result<(), Report> {
-    let verified = server::is_host_verified(&config.url, key)
+    let verified = server::is_host_verified(&config.url.as_ref().unwrap(), key) //TODO unwrap
         .await?
         .is_success();
 
@@ -79,7 +93,7 @@ async fn agent_loop(
         };
 
         let code = server::add_verification_attempt(
-            &config.url,
+            &config.url.as_ref().unwrap(), //TODO unwrap
             &api::VerificationAttempt {
                 key: pub_key,
                 store_path: get_active_version()?,
@@ -95,7 +109,7 @@ async fn agent_loop(
 
     loop {
         let action = server::system_check(
-            &config.url,
+            &config.url.as_ref().unwrap(), //TODO unwrap
             key,
             &api::VersionRequest {
                 store_path: get_active_version()?,
