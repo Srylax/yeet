@@ -41,6 +41,11 @@ in
   };
 
   config = mkIf cfg.enable {
+
+    users.groups = {
+      yeet = { };
+    };
+
     systemd.services.yeet = {
       description = "Yeet Deploy Agent";
       wants = [ "network-online.target" ];
