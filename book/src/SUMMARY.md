@@ -3,7 +3,8 @@
 - [Introduction to Yeet](./intro.md)
 - [Quickstart](./quickstart.md)
 
-# For Developers
+# Design Documents
 
 - [Endpoints](developer/endpoints.md)
 - [Varlink](developer/varlink.md)
+- [Detach](developer/detach.md)
