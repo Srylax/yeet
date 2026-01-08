@@ -3,6 +3,7 @@
 Yeet is an PULL-based deployment server for Nix closures. Yeet only acts as an intermediary and does leave you open to choose your own nix cache and build-systems.
 
 The indent of Yeet is to:
+
 - Provide an easy way to manage your whole fleet of devices - from homelab to enterprise
 - Not pose any restrictions onto how your nix derivation is built
 - Allow for clients to be offline when the updates is created
@@ -18,8 +19,8 @@ This is where Yeet comes into play. By reversing the role with an on-device agen
 
 This allows to offload the heavy lifting of the build process to build-machines. Especially in infrastractures that include hundreds of devices the savings get noticeable.
 
-
 ## Architecture
+
 ```mermaid
 architecture-beta
 

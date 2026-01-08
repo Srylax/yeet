@@ -1,6 +1,7 @@
 # Endpoints
 
 The Lifecycle of an client is as following:
+
 ```mermaid
 stateDiagram-v2
     state if_state <<choice>>

@@ -20,6 +20,6 @@ in
     gcc
     pkg-config
     pkgs-unstable.mdbook
-    mdbook-mermaid
+    # mdbook-mermaid
   ];
 }
