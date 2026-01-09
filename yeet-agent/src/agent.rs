@@ -80,7 +80,7 @@ async fn agent_loop(
 
     if !verified {
         if let Some(code) = VERIFICATION_CODE.get() {
-            bail!("Verification requested but not yet approved. Code: {code}");
+            bail!("Verification requested but not yet approved by server. Code: {code}");
         }
 
         let nixos_facter = if facter {
