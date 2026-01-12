@@ -76,6 +76,10 @@ pub enum Commands {
         #[arg(long)]
         netrc: Option<PathBuf>,
 
+        /// Sets the `NIXOS_VARIANT` variable when building NixOS. You have to set `system.nixos.variantName = lib.maybeEnv "NIXOS_VARIANT" "No VARIANT"`
+        #[arg(long)]
+        variant: Option<String>,
+
         /// Which hosts should be built? Defaults to current ARCH
         #[arg(
             long,
@@ -93,6 +97,9 @@ pub enum Commands {
         /// Hosts to build - default is all
         #[arg(long)]
         host: Vec<String>,
+        /// Sets the `NIXOS_VARIANT` variable when building NixOS. You have to set `system.nixos.variantName = lib.maybeEnv "NIXOS_VARIANT" "No VARIANT"`
+        #[arg(long)]
+        variant: Option<String>,
         /// Which hosts should be built? Defaults to current ARCH
         #[arg(
             long,

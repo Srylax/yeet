@@ -1,8 +1,10 @@
-use std::{collections::HashMap,
-          fs::{read_to_string, remove_file},
-          io,
-          path::Path,
-          process::{Command, Stdio}};
+use std::{
+    collections::HashMap,
+    fs::{read_to_string, remove_file},
+    io,
+    path::Path,
+    process::{Command, Stdio},
+};
 
 use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use serde::{Deserialize, Serialize};
@@ -42,6 +44,7 @@ pub fn build_hosts(
     flake_path: &str,
     hosts: Vec<String>,
     darwin: bool,
+    variant: Option<String>,
 ) -> Result<HashMap<String, String>, Report> {
     let mut found_hosts = list_hosts(flake_path, darwin)?;
     // If empty build all
@@ -49,6 +52,15 @@ pub fn build_hosts(
         found_hosts.retain_mut(|host| hosts.contains(host));
     }
     let mut closures = HashMap::with_capacity(found_hosts.len());
+
+    let env = {
+        let mut env = HashMap::new();
+        if let Some(variant) = variant {
+            env.insert("NIXOS_VARIANT", variant);
+        }
+        env
+    };
+
     for ref host in found_hosts {
         let system = if darwin {
             format!("darwinConfigurations.{host}.system")
@@ -57,6 +69,7 @@ pub fn build_hosts(
         };
         let output = Command::new("nix")
             .args(["build", "--json", "--no-link", "-f", flake_path, &system])
+            .envs(&env)
             .stdout(Stdio::piped())
             .spawn()?
             .wait_with_output()?;

@@ -66,10 +66,15 @@ async fn main() -> Result<(), Report> {
         .merge(Env::prefixed("YEET_"))
         .extract()?;
     match args.command {
-        Commands::Build { path, host, darwin } => {
+        Commands::Build {
+            path,
+            host,
+            darwin,
+            variant,
+        } => {
             info!(
                 "{:?}",
-                nix::build_hosts(&path.to_string_lossy(), host, darwin)?
+                nix::build_hosts(&path.to_string_lossy(), host, darwin, variant)?
             );
         }
         Commands::VM { host, path } => run_vm(&path, &host)?,
@@ -82,6 +87,7 @@ async fn main() -> Result<(), Report> {
             host,
             darwin,
             netrc,
+            variant,
         } => {
             let url = &config
                 .url
@@ -121,7 +127,7 @@ async fn main() -> Result<(), Report> {
 
             info!("Building {host:?}");
 
-            let hosts = nix::build_hosts(&path.to_string_lossy(), host, darwin)?;
+            let hosts = nix::build_hosts(&path.to_string_lossy(), host, darwin, variant)?;
 
             if hosts.is_empty() {
                 bail!("No hosts found - did you commit your files?")
