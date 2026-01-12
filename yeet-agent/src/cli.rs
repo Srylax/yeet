@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use api::key::get_secret_key;
+use inquire::{list_option::ListOption, validator::Validation};
 use log::info;
 use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use tokio::fs::read_to_string;
@@ -61,6 +62,12 @@ pub async fn publish(
             .ok_or(report!("Cachix cache has no public signing keys"))?
     };
 
+    let host = if host.is_empty() {
+        get_hosts(&path.to_string_lossy(), darwin)?
+    } else {
+        host
+    };
+
     info!("Building {host:?}");
 
     let hosts = nix::build_hosts(&path.to_string_lossy(), host, darwin, variant)?;
@@ -73,7 +80,6 @@ pub async fn publish(
 
     cachix::push_paths(hosts.values(), &cachix).await?;
 
-    let before = status::status_string(&url, &httpsig_key).await?;
     server::update(
         &url,
         &get_secret_key(&httpsig_key)?,
@@ -85,7 +91,20 @@ pub async fn publish(
         },
     )
     .await?;
-    let after = status::status_string(&url, &httpsig_key).await?;
-    info!("{}", display::diff_inline(&before, &after));
-    todo!()
+    Ok(())
+}
+
+pub fn get_hosts(flake_path: &str, darwin: bool) -> Result<Vec<String>, Report> {
+    let detected_hosts = nix::list_hosts(flake_path, darwin)?;
+    Ok(
+        inquire::MultiSelect::new("Which host(s) would you like to publish>", detected_hosts)
+            .with_validator(|list: &[ListOption<&String>]| {
+                if list.len() < 1 {
+                    return Ok(Validation::Invalid("You must select a host!".into()));
+                } else {
+                    Ok(Validation::Valid)
+                }
+            })
+            .prompt()?,
+    )
 }

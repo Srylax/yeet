@@ -46,12 +46,7 @@ pub fn build_hosts(
     darwin: bool,
     variant: Option<String>,
 ) -> Result<HashMap<String, String>, Report> {
-    let mut found_hosts = list_hosts(flake_path, darwin)?;
-    // If empty build all
-    if !hosts.is_empty() {
-        found_hosts.retain_mut(|host| hosts.contains(host));
-    }
-    let mut closures = HashMap::with_capacity(found_hosts.len());
+    let mut closures = HashMap::with_capacity(hosts.len());
 
     let env = {
         let mut env = HashMap::new();
@@ -61,7 +56,7 @@ pub fn build_hosts(
         env
     };
 
-    for ref host in found_hosts {
+    for ref host in hosts {
         let system = if darwin {
             format!("darwinConfigurations.{host}.system")
         } else {
