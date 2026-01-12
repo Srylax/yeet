@@ -1,29 +1,17 @@
 //! # Yeet Agent
 
-use std::{
-    fs::read_to_string,
-    io::{IsTerminal as _, Write as _},
-};
+use std::io::{IsTerminal as _, Write as _};
 
-use api::key::get_secret_key;
 use clap::Parser as _;
 use figment::{
     Figment,
     providers::{Env, Format as _, Serialized, Toml},
 };
-use log::info;
-use rootcause::{Report, bail, hooks::Hooks, prelude::ResultExt as _, report};
-use yeet::{
-    cachix,
-    display::diff_inline,
-    nix::{self, run_vm},
-    server,
-};
 
-use crate::{
-    cli_args::{Commands, Config, Yeet},
-    status::status_string,
-};
+use rootcause::{Report, hooks::Hooks};
+use yeet::nix::{self};
+
+use crate::cli_args::{AgentConfig, Commands, Config, Yeet};
 
 mod agent;
 mod cli;
@@ -57,8 +45,10 @@ async fn main() -> Result<(), Report> {
         });
     }
     log_builder.init();
+
     let xdg_dirs = xdg::BaseDirectories::with_prefix("yeet");
     let args = Yeet::try_parse()?;
+
     let config: Config = Figment::new()
         .merge(Toml::file(
             xdg_dirs.find_config_file("agent.toml").unwrap_or_default(),
@@ -66,8 +56,20 @@ async fn main() -> Result<(), Report> {
         .merge(Serialized::defaults(args.config))
         .merge(Env::prefixed("YEET_"))
         .extract()?;
+
     match args.command {
-        Commands::Agent { sleep, facter } => {
+        Commands::Agent {
+            server,
+            sleep,
+            facter,
+            key,
+        } => {
+            let config = AgentConfig {
+                server,
+                sleep,
+                facter,
+                key,
+            };
             agent::agent(&config, sleep, facter).await?;
         }
         Commands::Status { json } => status::status(json).await?,

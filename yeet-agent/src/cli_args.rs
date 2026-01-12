@@ -49,10 +49,26 @@ pub struct Config {
     pub cachix_key: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AgentConfig {
+    pub server: Url,
+    pub sleep: u64,
+    pub facter: bool,
+    pub key: PathBuf,
+}
+
 #[expect(clippy::doc_markdown, reason = "No Markdown for clap")]
 #[derive(Subcommand)]
 pub enum Commands {
     Agent {
+        /// URL of the Yeet Server
+        #[arg(long)]
+        server: Url,
+
+        /// Path to ed25519 key which is used for authentication
+        #[arg(long)]
+        key: PathBuf,
+
         /// Seconds to wait between updates.
         /// Lower bound, may be higher between switching versions
         #[arg(short, long, default_value = "30")]

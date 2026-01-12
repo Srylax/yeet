@@ -6,7 +6,7 @@ use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use tokio::fs::read_to_string;
 use yeet::{cachix, display, server};
 
-use crate::{cli_args::Config, nix, status};
+use crate::{cli_args::Config, nix, status, varlink};
 
 pub async fn publish(
     config: &Config,
@@ -16,10 +16,20 @@ pub async fn publish(
     variant: Option<String>,
     darwin: bool,
 ) -> Result<(), Report> {
+    let agent_url = {
+        let agent_config = varlink::config().await;
+        if let Err(e) = &agent_config {
+            log::error!("Could not get agent config: {e}")
+        }
+        agent_config.ok().map(|config| config.server)
+    };
+
     let url = &config
         .url
         .clone()
+        .or(agent_url)
         .ok_or(rootcause::report!("`--url` required for publish"))?;
+
     let httpsig_key = &config
         .httpsig_key
         .clone()

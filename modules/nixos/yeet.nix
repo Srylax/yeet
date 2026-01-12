@@ -14,7 +14,7 @@ in
   options.services.yeet = {
     enable = mkEnableOption "Yeet Deploy Agent: https://github.com/Srylax/yeet";
 
-    url = mkOption {
+    server = mkOption {
       type = types.str;
       description = "Yeet server url to use.";
     };
@@ -31,7 +31,7 @@ in
       description = "Collect information about the system with `nixos-facter`";
     };
 
-    httpsigKey = mkOption {
+    key = mkOption {
       type = types.str;
       default = "/etc/ssh/ssh_host_ed25519_key";
       description = "ED25519 key used as the hosts identity";
@@ -65,7 +65,7 @@ in
         RestartSec = 5;
         RuntimeDirectory = "yeet";
         ExecStart = ''
-          ${lib.getExe cfg.package} agent --sleep ${toString cfg.sleep} --url ${cfg.url} --httpsig-key ${cfg.httpsigKey} ${lib.optionalString cfg.facter "--facter"}
+          ${lib.getExe cfg.package} agent --sleep ${toString cfg.sleep} --server ${cfg.server} --key ${cfg.key} ${lib.optionalString cfg.facter "--facter"}
         '';
       };
     };

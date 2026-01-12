@@ -17,7 +17,10 @@ use zlink::{
 
 shadow_rs::shadow!(build);
 
-use crate::{cli_args, version};
+use crate::{
+    cli_args::{self, AgentConfig},
+    version,
+};
 
 const SOCKET_PATH: &str = "/run/yeet/agent.varlink";
 
@@ -26,11 +29,14 @@ const SOCKET_PATH: &str = "/run/yeet/agent.varlink";
 pub enum YeetMethod {
     #[serde(rename = "ch.yeetme.yeet.Status")]
     Status,
+    #[serde(rename = "ch.yeetme.yeet.Config")]
+    Config,
 }
 
 #[proxy("ch.yeetme.yeet")]
 pub trait YeetProxy {
     async fn status(&mut self) -> zlink::Result<Result<DaemonStatus, YeetDaemonError>>;
+    async fn config(&mut self) -> zlink::Result<Result<AgentConfig, YeetDaemonError>>;
 }
 
 pub async fn client() -> Result<Connection<zlink::unix::Stream>, Error> {
@@ -51,6 +57,16 @@ pub async fn status() -> Result<DaemonStatus, Error> {
         .map_err(|e| Error::DaemonError(e))
 }
 
+pub async fn config() -> Result<AgentConfig, Error> {
+    let mut client = client().await?;
+    client
+        .config()
+        .await
+        .context("Could not communicate with the varlink daemon")
+        .map_err(ReportAsError::from)?
+        .map_err(|e| Error::DaemonError(e))
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -63,6 +79,7 @@ pub enum Error {
 #[serde(untagged)]
 pub enum YeetReply {
     Status(DaemonStatus),
+    Config(AgentConfig),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -95,7 +112,7 @@ pub enum YeetDaemonError {
 }
 
 pub struct YeetVarlinkService {
-    config: cli_args::Config,
+    config: cli_args::AgentConfig,
     key: SecretKey,
 }
 
@@ -119,11 +136,11 @@ impl Service for YeetVarlinkService {
                 log::debug!("Varlink: Daemon status requested");
 
                 let verified =
-                    //TODO unwrap
-                    match server::is_host_verified(&self.config.url.as_ref().unwrap(), &self.key).await {
-                        Ok(verified) => Some(verified.is_success()),
-                        Err(_) => None,
-                    };
+                            //TODO unwrap
+                            match server::is_host_verified(&self.config.server, &self.key).await {
+                                Ok(verified) => Some(verified.is_success()),
+                                Err(_) => None,
+                            };
 
                 let system_check = {
                     let Ok(store_path) = version::get_active_version() else {
@@ -131,7 +148,7 @@ impl Service for YeetVarlinkService {
                     };
 
                     server::system_check(
-                        self.config.url.as_ref().unwrap(), //TODO unwrap
+                        &self.config.server,
                         &self.key,
                         &api::VersionRequest { store_path },
                     )
@@ -162,17 +179,18 @@ impl Service for YeetVarlinkService {
 
                 MethodReply::Single(Some(YeetReply::Status(DaemonStatus {
                     up_to_date,
-                    server: self.config.url.clone().unwrap(), //TODO unwrap
+                    server: self.config.server.clone(),
                     mode,
                     version: String::from(build::PKG_VERSION),
                 })))
             }
+            YeetMethod::Config => MethodReply::Single(Some(YeetReply::Config(self.config.clone()))),
         }
     }
 }
 
 impl YeetVarlinkService {
-    pub async fn start(config: cli_args::Config, key: SecretKey) -> Result<(), Report> {
+    pub async fn start(config: cli_args::AgentConfig, key: SecretKey) -> Result<(), Report> {
         let listener = {
             let _ = remove_file(SOCKET_PATH).await;
             fs::create_dir_all(Path::new(SOCKET_PATH).parent().unwrap())
