@@ -17,7 +17,7 @@ use zlink::{
 
 shadow_rs::shadow!(build);
 
-use crate::{cli, version};
+use crate::{cli_args, version};
 
 const SOCKET_PATH: &str = "/run/yeet/agent.varlink";
 
@@ -95,7 +95,7 @@ pub enum YeetDaemonError {
 }
 
 pub struct YeetVarlinkService {
-    config: cli::Config,
+    config: cli_args::Config,
     key: SecretKey,
 }
 
@@ -172,7 +172,7 @@ impl Service for YeetVarlinkService {
 }
 
 impl YeetVarlinkService {
-    pub async fn start(config: cli::Config, key: SecretKey) -> Result<(), Report> {
+    pub async fn start(config: cli_args::Config, key: SecretKey) -> Result<(), Report> {
         let listener = {
             let _ = remove_file(SOCKET_PATH).await;
             fs::create_dir_all(Path::new(SOCKET_PATH).parent().unwrap())

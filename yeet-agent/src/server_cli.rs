@@ -10,7 +10,7 @@ use rootcause::{Report, prelude::ResultExt as _};
 use yeet::{display::diff_inline, server};
 
 use crate::{
-    cli::{AuthLevel, Config, ServerCommands},
+    cli_args::{AuthLevel, Config, ServerCommands},
     status::status_string,
 };
 

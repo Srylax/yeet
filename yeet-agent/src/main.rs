@@ -21,12 +21,13 @@ use yeet::{
 };
 
 use crate::{
-    cli::{Commands, Config, Yeet},
+    cli_args::{Commands, Config, Yeet},
     status::status_string,
 };
 
 mod agent;
 mod cli;
+mod cli_args;
 mod section;
 mod server_cli;
 mod status;
@@ -66,18 +67,6 @@ async fn main() -> Result<(), Report> {
         .merge(Env::prefixed("YEET_"))
         .extract()?;
     match args.command {
-        Commands::Build {
-            path,
-            host,
-            darwin,
-            variant,
-        } => {
-            info!(
-                "{:?}",
-                nix::build_hosts(&path.to_string_lossy(), host, darwin, variant)?
-            );
-        }
-        Commands::VM { host, path } => run_vm(&path, &host)?,
         Commands::Agent { sleep, facter } => {
             agent::agent(&config, sleep, facter).await?;
         }
@@ -89,68 +78,7 @@ async fn main() -> Result<(), Report> {
             netrc,
             variant,
         } => {
-            let url = &config
-                .url
-                .clone()
-                .ok_or(rootcause::report!("`--url` required for publish"))?;
-
-            let httpsig_key = &config
-                .httpsig_key
-                .clone()
-                .ok_or(rootcause::report!("`--httpsig_key` required for publish"))?;
-
-            let cachix = config.cachix.clone().ok_or(report!(
-                "Cachix cache name required. Set it in config or via the --cachix flag"
-            ))?;
-
-            let netrc = match netrc {
-                Some(netrc) => Some(
-                    read_to_string(&netrc)
-                        .context("Could not read netrc file")
-                        .attach(format!("File: {}", &netrc.to_string_lossy()))?,
-                ),
-                None => None,
-            };
-
-            let public_key = if let Some(key) = &config.cachix_key {
-                key.clone()
-            } else {
-                let cache_info = cachix::get_cachix_info(&cachix).await.context(
-                    "Could not get cache information. For private caches use `--cachix-key`",
-                )?;
-                cache_info
-                    .public_signing_keys
-                    .first()
-                    .cloned()
-                    .ok_or(report!("Cachix cache has no public signing keys"))?
-            };
-
-            info!("Building {host:?}");
-
-            let hosts = nix::build_hosts(&path.to_string_lossy(), host, darwin, variant)?;
-
-            if hosts.is_empty() {
-                bail!("No hosts found - did you commit your files?")
-            }
-
-            info!("Pushing {hosts:?}");
-
-            cachix::push_paths(hosts.values(), &cachix).await?;
-
-            let before = status_string(&url, &httpsig_key).await?;
-            server::update(
-                &url,
-                &get_secret_key(&httpsig_key)?,
-                &api::HostUpdateRequest {
-                    hosts,
-                    public_key,
-                    substitutor: format!("https://{cachix}.cachix.org"),
-                    netrc,
-                },
-            )
-            .await?;
-            let after = status_string(&url, &httpsig_key).await?;
-            info!("{}", diff_inline(&before, &after));
+            cli::publish(&config, path, host, netrc, variant, darwin).await?;
         }
         Commands::Server(args) => server_cli::handle_server_commands(args.command, &config).await?,
     }

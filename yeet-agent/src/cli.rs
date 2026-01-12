@@ -1,236 +1,81 @@
-use std::{env::current_dir, path::PathBuf};
+use std::path::PathBuf;
 
-use build::CLAP_LONG_VERSION;
-use clap::{Args, Parser, Subcommand, ValueEnum};
-use serde::{Deserialize, Serialize};
-use shadow_rs::shadow;
-use url::Url;
+use api::key::get_secret_key;
+use log::info;
+use rootcause::{Report, bail, prelude::ResultExt as _, report};
+use tokio::fs::read_to_string;
+use yeet::{cachix, display, server};
 
-shadow!(build);
+use crate::{cli_args::Config, nix, status};
 
-#[derive(Parser)]
-#[clap(long_version = CLAP_LONG_VERSION)]
-#[command(version, about, long_about = None)]
-pub struct Yeet {
-    #[command(flatten)]
-    pub config: ClapConfig,
-    #[command(subcommand)]
-    pub command: Commands,
-}
+pub async fn publish(
+    config: &Config,
+    path: PathBuf,
+    host: Vec<String>,
+    netrc: Option<PathBuf>,
+    variant: Option<String>,
+    darwin: bool,
+) -> Result<(), Report> {
+    let url = &config
+        .url
+        .clone()
+        .ok_or(rootcause::report!("`--url` required for publish"))?;
+    let httpsig_key = &config
+        .httpsig_key
+        .clone()
+        .ok_or(rootcause::report!("`--httpsig_key` required for publish"))?;
+    let cachix = config.cachix.clone().ok_or(report!(
+        "Cachix cache name required. Set it in config or via the --cachix flag"
+    ))?;
 
-#[derive(Args, Serialize, Deserialize)]
-pub struct ClapConfig {
-    /// Base URL of the Yeet Server
-    #[arg(long, global = true)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<Url>,
+    let netrc = match netrc {
+        Some(netrc) => Some(
+            read_to_string(&netrc)
+                .await
+                .context("Could not read netrc file")
+                .attach(format!("File: {}", &netrc.to_string_lossy()))?,
+        ),
+        None => None,
+    };
 
-    /// Path to ed25519 key which is used for authentication
-    #[arg(long, global = true)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub httpsig_key: Option<PathBuf>, // TODO: create a key selector
+    let public_key = if let Some(key) = &config.cachix_key {
+        key.clone()
+    } else {
+        let cache_info = cachix::get_cachix_info(&cachix)
+            .await
+            .context("Could not get cache information. For private caches use `--cachix-key`")?;
+        cache_info
+            .public_signing_keys
+            .first()
+            .cloned()
+            .ok_or(report!("Cachix cache has no public signing keys"))?
+    };
 
-    /// Cachix cache name
-    #[arg(long, global = true)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cachix: Option<String>,
+    info!("Building {host:?}");
 
-    /// Cachix signing key
-    #[arg(long, global = true)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cachix_key: Option<String>,
-}
+    let hosts = nix::build_hosts(&path.to_string_lossy(), host, darwin, variant)?;
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Config {
-    pub url: Option<Url>, // TODO
-    pub httpsig_key: Option<PathBuf>,
-    pub cachix: Option<String>,
-    pub cachix_key: Option<String>,
-}
+    if hosts.is_empty() {
+        bail!("No hosts found - did you commit your files?")
+    }
 
-#[expect(clippy::doc_markdown, reason = "No Markdown for clap")]
-#[derive(Subcommand)]
-pub enum Commands {
-    Agent {
-        /// Seconds to wait between updates.
-        /// Lower bound, may be higher between switching versions
-        #[arg(short, long, default_value = "30")]
-        sleep: u64,
+    info!("Pushing {hosts:?}");
 
-        /// Collect facter with nixos-facter
-        #[arg(long)]
-        facter: bool,
-    },
-    /// Build and then publish some or all hosts in a flake
-    Publish {
-        /// Path to flake
-        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
-        path: PathBuf,
+    cachix::push_paths(hosts.values(), &cachix).await?;
 
-        /// Hosts to build - default is all
-        #[arg(long)]
-        host: Vec<String>,
-
-        /// netrc File to use when downloading from the cache. Useful when using private caches
-        #[arg(long)]
-        netrc: Option<PathBuf>,
-
-        /// Sets the `NIXOS_VARIANT` variable when building NixOS. You have to set `system.nixos.variantName = lib.maybeEnv "NIXOS_VARIANT" "No VARIANT"`
-        #[arg(long)]
-        variant: Option<String>,
-
-        /// Which hosts should be built? Defaults to current ARCH
-        #[arg(
-            long,
-            default_value_t = std::env::consts::ARCH == "aarch64",
-            default_missing_value = (std::env::consts::ARCH == "aarch64").to_string(),
-            num_args = 0..=1,
-            require_equals = false)]
-        darwin: bool,
-    },
-    /// Build some or all hosts in a flake
-    Build {
-        /// Path to flake
-        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
-        path: PathBuf,
-        /// Hosts to build - default is all
-        #[arg(long)]
-        host: Vec<String>,
-        /// Sets the `NIXOS_VARIANT` variable when building NixOS. You have to set `system.nixos.variantName = lib.maybeEnv "NIXOS_VARIANT" "No VARIANT"`
-        #[arg(long)]
-        variant: Option<String>,
-        /// Which hosts should be built? Defaults to current ARCH
-        #[arg(
-            long,
-            default_value_t = std::env::consts::ARCH == "aarch64",
-            default_missing_value = (std::env::consts::ARCH == "aarch64").to_string(),
-            num_args = 0..=1,
-            require_equals = false)]
-        darwin: bool,
-    },
-
-    /// Query the status of all or your local hosts
-    /// Requires either admin credentials or sudo
-    Status {
-        /// Instead of printing, output everything as json
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Run you hosts inside a vm
-    VM {
-        /// NixOs host to run and build
-        #[arg(index = 1)]
-        host: String,
-        /// Path to flake
-        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
-        path: PathBuf,
-    },
-
-    /// These are the raw subcommands to execute functions on the server
-    Server(ServerArgs),
-}
-
-#[derive(Args)]
-pub struct ServerArgs {
-    #[command(subcommand)]
-    pub command: ServerCommands,
-}
-
-#[derive(Subcommand)]
-pub enum ServerCommands {
-    /// Update a host e.g. push a new `store_path` TODO: batch update
-    Update {
-        /// Name of the host
-        #[arg(long)]
-        host: String,
-
-        /// The new store path
-        #[arg(long)]
-        store_path: String,
-
-        /// The public key the agent should use to verify the update
-        #[arg(long)]
-        public_key: String,
-
-        /// The substitutor the agent should use to fetch the update
-        #[arg(long)]
-        substitutor: String,
-
-        /// netrc File to use when downloading from the cache. Useful when using private caches
-        #[arg(long)]
-        netrc: Option<PathBuf>,
-    },
-    /// Register a new host
-    Register {
-        /// Store path of the first version
-        #[arg(long)]
-        store_path: Option<String>,
-
-        /// The public key the agent should use to verify the update
-        #[arg(long)]
-        public_key: Option<String>,
-
-        /// The substitutor the agent should use to fetch the update
-        #[arg(long)]
-        substitutor: Option<String>,
-
-        /// netrc File to use when downloading from the cache. Useful when using private caches
-        #[arg(long)]
-        netrc: Option<api::NETRC>,
-
-        /// Pet name for the host
-        #[arg(index = 1)]
-        name: String,
-    },
-    /// Check if a key is verified
-    VerifyStatus,
-    /// Adds a key to the server for verification
-    AddVerification {
-        /// Store path of the current running system
-        #[arg(long)]
-        store_path: String,
-        /// The public key the of the verification attempt
-        #[arg(long)]
-        public_key: PathBuf,
-        /// Facter input file
-        #[arg(long)]
-        facter: Option<PathBuf>,
-    },
-    /// Approve a pending key verification with the corresponding code
-    VerifyAttempt {
-        /// Pet name for the host
-        #[arg(index = 1)]
-        name: String,
-        /// Verification code
-        #[arg(index = 2)]
-        code: u32,
-        /// Facter output file
-        #[arg(long)]
-        facter: PathBuf,
-    },
-    /// Add a new admin or build key to the server
-    AddKey {
-        /// Public key to add
-        #[arg(index = 1)]
-        key: PathBuf,
-        /// Should the key be added as admin or as build
-        #[arg(value_enum, index = 2)]
-        admin: AuthLevel,
-    },
-    /// Remove a key from the server (can also used to remove hosts)
-    RemoveKey {
-        /// Public key to remove
-        #[arg(index = 1)]
-        key: PathBuf,
-    },
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum AuthLevel {
-    /// New Admin Level key [CAUTION]
-    Admin,
-    /// New key for build pipelines
-    Build,
+    let before = status::status_string(&url, &httpsig_key).await?;
+    server::update(
+        &url,
+        &get_secret_key(&httpsig_key)?,
+        &api::HostUpdateRequest {
+            hosts,
+            public_key,
+            substitutor: format!("https://{cachix}.cachix.org"),
+            netrc,
+        },
+    )
+    .await?;
+    let after = status::status_string(&url, &httpsig_key).await?;
+    info!("{}", display::diff_inline(&before, &after));
+    todo!()
 }

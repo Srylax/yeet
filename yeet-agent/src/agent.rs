@@ -18,7 +18,7 @@ use tempfile::NamedTempFile;
 use tokio::time;
 use yeet::{nix, server};
 
-use crate::{cli::Config, varlink, version::get_active_version};
+use crate::{cli_args::Config, varlink, version::get_active_version};
 
 static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 
