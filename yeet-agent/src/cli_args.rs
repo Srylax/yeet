@@ -25,11 +25,6 @@ pub struct ClapConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<Url>,
 
-    /// Path to ed25519 key which is used for authentication
-    #[arg(long, global = true)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub httpsig_key: Option<PathBuf>, // TODO: create a key selector
-
     /// Cachix cache name
     #[arg(long, global = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -43,8 +38,7 @@ pub struct ClapConfig {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
-    pub url: Option<Url>, // TODO
-    pub httpsig_key: Option<PathBuf>,
+    pub url: Option<Url>,
     pub cachix: Option<String>,
     pub cachix_key: Option<String>,
 }
@@ -122,6 +116,9 @@ pub enum Commands {
 pub struct ServerArgs {
     #[command(subcommand)]
     pub command: ServerCommands,
+    /// Path to ed25519 key which is used for authentication
+    #[arg(long, global = true)]
+    pub httpsig_key: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]

@@ -10,23 +10,20 @@ use rootcause::{Report, prelude::ResultExt as _};
 use yeet::{display::diff_inline, server};
 
 use crate::{
-    cli_args::{AuthLevel, Config, ServerCommands},
+    cli_args::{AuthLevel, Config, ServerArgs, ServerCommands},
     status::status_string,
 };
 
-pub async fn handle_server_commands(
-    command: ServerCommands,
-    config: &Config,
-) -> Result<(), Report> {
+pub async fn handle_server_commands(args: ServerArgs, config: &Config) -> Result<(), Report> {
     let url = &config
         .url
         .clone()
         .ok_or(rootcause::report!("`--url` required for server commands"))?;
 
-    let httpsig_key = &config.httpsig_key.clone().ok_or(rootcause::report!(
+    let httpsig_key = &args.httpsig_key.clone().ok_or(rootcause::report!(
         "`--httpsig_key` required for server commands"
     ))?;
-    match command {
+    match args.command {
         ServerCommands::Register {
             store_path,
             name,
