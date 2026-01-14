@@ -1,13 +1,12 @@
 use std::path::PathBuf;
 
-use api::key::get_secret_key;
 use inquire::{list_option::ListOption, validator::Validation};
 use log::info;
 use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use tokio::fs::read_to_string;
-use yeet::{cachix, display, server};
+use yeet::{cachix, server};
 
-use crate::{cli_args::Config, nix, status, varlink};
+use crate::{cli_args::Config, nix, sig::ssh, varlink};
 
 pub async fn publish(
     config: &Config,
@@ -30,11 +29,10 @@ pub async fn publish(
         .clone()
         .or(agent_url)
         .ok_or(rootcause::report!("`--url` required for publish"))?;
+    let domain = url
+        .domain()
+        .ok_or(rootcause::report!("Provided URL has no domain part"))?;
 
-    let httpsig_key = &config
-        .httpsig_key
-        .clone()
-        .ok_or(rootcause::report!("`--httpsig_key` required for publish"))?;
     let cachix = config.cachix.clone().ok_or(report!(
         "Cachix cache name required. Set it in config or via the --cachix flag"
     ))?;
@@ -82,7 +80,7 @@ pub async fn publish(
 
     server::update(
         &url,
-        &get_secret_key(&httpsig_key)?,
+        &ssh::key_by_url(domain)?,
         &api::HostUpdateRequest {
             hosts,
             public_key,

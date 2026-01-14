@@ -1,6 +1,6 @@
 [package]
 name = "yeet"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 categories = []
 keywords = ["nix", "deployment", "pull-based"]
@@ -39,6 +39,9 @@ futures-util = "0.3.31"
 nix = {version = "0.30.1", features = ["user"]}
 thiserror = "2.0.17"
 inquire = "0.9.1"
+ssh2-config = "0.6.5"
+
+# TODO: ssh-agent-client-rs = "1.1.2"
 
 [build-dependencies]
 shadow-rs = "1.5"

@@ -18,6 +18,9 @@ mod cli;
 mod cli_args;
 mod section;
 mod server_cli;
+mod sig {
+    pub mod ssh;
+}
 mod status;
 mod systemd;
 mod varlink;
