@@ -12,13 +12,12 @@ use backon::{ConstantBuilder, Retryable as _};
 use ed25519_dalek::VerifyingKey;
 use httpsig_hyper::prelude::SecretKey;
 use log::{error, info};
-use notify_rust::Notification;
 use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use tempfile::NamedTempFile;
 use tokio::time;
 use yeet::{nix, server};
 
-use crate::{cli_args::AgentConfig, varlink, version::get_active_version};
+use crate::{cli_args::AgentConfig, notification, varlink, version::get_active_version};
 
 static VERIFICATION_CODE: OnceLock<u32> = OnceLock::new();
 
@@ -141,11 +140,7 @@ fn trusted_public_keys() -> Result<Vec<String>, Report> {
 fn update(version: &api::RemoteStorePath) -> Result<(), Report> {
     download(version)?;
     activate(version)?;
-    Notification::new()
-        .summary("System Update")
-        .body("System has been updated successfully")
-        .appname("Yeet")
-        .show()?;
+    notification::notify_all()?;
     Ok(())
 }
 

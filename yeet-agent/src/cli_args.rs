@@ -54,6 +54,9 @@ pub struct AgentConfig {
 #[expect(clippy::doc_markdown, reason = "No Markdown for clap")]
 #[derive(Subcommand)]
 pub enum Commands {
+    #[command(hide = true)]
+    /// Used to notify all users
+    Notify,
     Agent {
         /// URL of the Yeet Server
         #[arg(long)]

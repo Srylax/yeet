@@ -7,7 +7,6 @@ use figment::{
     Figment,
     providers::{Env, Format as _, Serialized, Toml},
 };
-
 use rootcause::{Report, hooks::Hooks};
 use yeet::nix::{self};
 
@@ -21,6 +20,7 @@ mod server_cli;
 mod sig {
     pub mod ssh;
 }
+mod notification;
 mod status;
 mod systemd;
 mod varlink;
@@ -61,6 +61,7 @@ async fn main() -> Result<(), Report> {
         .extract()?;
 
     match args.command {
+        Commands::Notify => notification::notify()?,
         Commands::Agent {
             server,
             sleep,

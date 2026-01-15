@@ -1,6 +1,6 @@
 reorder_imports = true
 unstable_features = true
-imports_indent = "Visual"
+# imports_indent = "Visual"
 # imports_layout = "HorizontalVertical"
 imports_granularity = "Crate"
 group_imports = "StdExternalCrate"
