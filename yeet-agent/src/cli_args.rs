@@ -167,28 +167,6 @@ pub enum ServerCommands {
         #[arg(long)]
         netrc: Option<PathBuf>,
     },
-    /// Register a new host
-    Register {
-        /// Store path of the first version
-        #[arg(long)]
-        store_path: Option<String>,
-
-        /// The public key the agent should use to verify the update
-        #[arg(long)]
-        public_key: Option<String>,
-
-        /// The substitutor the agent should use to fetch the update
-        #[arg(long)]
-        substitutor: Option<String>,
-
-        /// netrc File to use when downloading from the cache. Useful when using private caches
-        #[arg(long)]
-        netrc: Option<api::NETRC>,
-
-        /// Pet name for the host
-        #[arg(index = 1)]
-        name: String,
-    },
     /// Check if a key is verified
     VerifyStatus,
     /// Adds a key to the server for verification

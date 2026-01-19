@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
-use axum::{Json,
-           extract::{FromRequest, FromRequestParts, Request},
-           http::{self, HeaderMap, StatusCode, header}};
+use axum::{
+    Json,
+    extract::{FromRequest, FromRequestParts, Request},
+    http::{self, HeaderMap, StatusCode, header},
+};
 use ed25519_dalek::VerifyingKey;
-use httpsig_hyper::{ContentDigest as _,
-                    MessageSignature as _,
-                    MessageSignatureReq as _,
-                    RequestContentDigest as _,
-                    prelude::{AlgorithmName, PublicKey}};
+use httpsig_hyper::{
+    ContentDigest as _, MessageSignature as _, MessageSignatureReq as _, RequestContentDigest as _,
+    prelude::{AlgorithmName, PublicKey},
+};
 use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 
@@ -69,7 +70,7 @@ where
 {
     type Rejection = (StatusCode, String);
 
-    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(req: Request, _state: &S) -> Result<Self, Self::Rejection> {
         let req = req
             .verify_content_digest()
             .await

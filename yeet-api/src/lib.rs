@@ -49,12 +49,6 @@ pub struct RemoteStorePath {
     pub netrc: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct RegisterHost {
-    pub provision_state: ProvisionState,
-    pub name: String,
-}
-
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 pub struct VerificationAttempt {
     pub key: VerifyingKey,

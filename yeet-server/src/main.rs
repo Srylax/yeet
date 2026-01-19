@@ -2,7 +2,7 @@
 
 use std::{
     env,
-    fs::{File, OpenOptions, rename},
+    fs::{File, OpenOptions},
     hash::{DefaultHasher, Hash as _, Hasher as _},
     os::unix::prelude::FileExt as _,
     sync::Arc,
@@ -21,7 +21,6 @@ use tokio::{net::TcpListener, time::interval};
 use crate::{
     routes::{
         key::{add_key, remove_key},
-        register::register_host,
         system_check::system_check,
         update::update_hosts,
         verify::{add_verification_attempt, is_host_verified, verify_attempt},
@@ -34,7 +33,6 @@ mod httpsig;
 mod state;
 mod routes {
     pub mod key;
-    pub mod register;
     pub mod status;
     pub mod system_check;
     pub mod update;
@@ -83,7 +81,6 @@ async fn main() {
 fn routes(state: Arc<RwLock<AppState>>) -> Router {
     Router::new()
         .route("/system/check", post(system_check))
-        .route("/system/register", post(register_host))
         .route("/system/update", post(update_hosts))
         .route("/system/verify/accept", post(verify_attempt))
         .route("/system/verify", get(is_host_verified))
@@ -91,8 +88,6 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .route("/key/add", post(add_key))
         .route("/key/remove", post(remove_key))
         .route("/status", get(status::status))
-        .route("/status/{hostname}", get(status::status_by_name))
-        .route("/status/registered", get(status::get_registered_hosts))
         .route("/status/host_by_key", get(status::hosts_by_key))
         .with_state(state)
 }
@@ -132,18 +127,18 @@ async fn save_state(state: &Arc<RwLock<AppState>>) {
     }
 }
 
-#[cfg(test)]
-use axum_test::TestServer;
+// #[cfg(test)]
+// use axum_test::TestServer;
 
-#[cfg(test)]
-fn test_server(state: AppState) -> (TestServer, Arc<RwLock<AppState>>) {
-    let app_state = Arc::new(RwLock::new(state));
-    let app_state_copy = Arc::clone(&app_state);
-    let app = routes(app_state);
-    let server = TestServer::builder()
-        .expect_success_by_default()
-        .http_transport()
-        .build(app)
-        .expect("Could not build TestServer");
-    (server, app_state_copy)
-}
+// #[cfg(test)]
+// fn test_server(state: AppState) -> (TestServer, Arc<RwLock<AppState>>) {
+//     let app_state = Arc::new(RwLock::new(state));
+//     let app_state_copy = Arc::clone(&app_state);
+//     let app = routes(app_state);
+//     let server = TestServer::builder()
+//         .expect_success_by_default()
+//         .http_transport()
+//         .build(app)
+//         .expect("Could not build TestServer");
+//     (server, app_state_copy)
+// }

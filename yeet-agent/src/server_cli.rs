@@ -3,12 +3,9 @@ use std::{collections::HashMap, fs::read_to_string};
 use api::key::{get_secret_key, get_verify_key};
 use log::info;
 use rootcause::{Report, prelude::ResultExt as _};
-use yeet::{display::diff_inline, server};
+use yeet::server;
 
-use crate::{
-    cli_args::{AuthLevel, Config, ServerArgs, ServerCommands},
-    status::status_string,
-};
+use crate::cli_args::{AuthLevel, Config, ServerArgs, ServerCommands};
 
 pub async fn handle_server_commands(args: ServerArgs, config: &Config) -> Result<(), Report> {
     let url = &config
@@ -20,41 +17,6 @@ pub async fn handle_server_commands(args: ServerArgs, config: &Config) -> Result
         "`--httpsig_key` required for server commands"
     ))?;
     match args.command {
-        ServerCommands::Register {
-            store_path,
-            name,
-            public_key,
-            substitutor,
-            netrc,
-        } => {
-            let before = status_string(&url, &httpsig_key).await?;
-
-            let provision_state = if let Some(store_path) = store_path
-                && let Some(public_key) = public_key
-                && let Some(substitutor) = substitutor
-            {
-                api::ProvisionState::Provisioned(api::RemoteStorePath {
-                    public_key,
-                    store_path,
-                    substitutor,
-                    netrc,
-                })
-            } else {
-                api::ProvisionState::NotSet
-            };
-
-            server::register(
-                &url,
-                &get_secret_key(&httpsig_key)?,
-                &api::RegisterHost {
-                    provision_state,
-                    name,
-                },
-            )
-            .await?;
-            let after = status_string(&url, &httpsig_key).await?;
-            info!("{}", diff_inline(&before, &after));
-        }
         ServerCommands::Update {
             host,
             store_path,

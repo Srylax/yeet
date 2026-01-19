@@ -53,22 +53,6 @@ pub async fn get_hosts<K: SigningKey + Sync>(url: &Url, key: &K) -> Result<Vec<a
         .await
 }
 
-pub async fn register<K: SigningKey + Sync>(
-    url: &Url,
-    key: &K,
-    register_host: &api::RegisterHost,
-) -> Result<StatusCode, Report> {
-    Client::new()
-        .post(url.join("/system/register")?)
-        .json(register_host)
-        .sign(&sig_param(key)?, key)
-        .await?
-        .send()
-        .await?
-        .error_for_code()
-        .await
-}
-
 pub async fn update<K: SigningKey + Sync>(
     url: &Url,
     key: &K,

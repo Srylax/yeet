@@ -44,10 +44,6 @@ pub enum StateError {
     #[error("Verification attempt with code {0} not found")]
     #[status(StatusCode::BAD_REQUEST)]
     AttemptNotFound(u32),
-
-    #[error("There is no host `{0}` pre registered")]
-    #[status(StatusCode::BAD_REQUEST)]
-    PreRegisterNotFound(String),
 }
 
 type Result<T> = core::result::Result<T, StateError>;
@@ -67,20 +63,9 @@ pub struct AppState {
     host_by_key: HashMap<VerifyingKey, Hostname>,
     // 6 digit number -> unverified pub key
     verification_attempt: HashMap<u32, (api::VerificationAttempt, Zoned)>,
-
-    // A list of hosts ready for registration
-    pre_register_host: HashMap<Hostname, api::ProvisionState>,
 }
 
 impl AppState {
-    pub fn pre_register_host(
-        &mut self,
-        name: String,
-        state: api::ProvisionState,
-    ) -> Option<api::ProvisionState> {
-        self.pre_register_host.insert(name, state)
-    }
-
     #[expect(unused_must_use)]
     fn drain_verification_attempts(&mut self) {
         self.verification_attempt.extract_if(|_key, (_kv, time)| {
@@ -130,18 +115,10 @@ impl AppState {
     ) -> Result<api::VerificationArtifacts> {
         self.drain_verification_attempts();
 
-        // check if the host is registered before we remove the verification attempt
-        // else we would remove it and wont have an attemp if the host is not registered
-        if !self.pre_register_host.contains_key(&acceptance.hostname) {
-            return Err(StateError::PreRegisterNotFound(acceptance.hostname));
-        }
-
         let (attempt, first_ping) = self
             .verification_attempt
             .remove(&acceptance.code)
             .ok_or(StateError::AttemptNotFound(acceptance.code))?;
-
-        let state = self.pre_register_host.remove(&acceptance.hostname).unwrap();
 
         let signing_key = PublicKey::from_bytes(AlgorithmName::Ed25519, attempt.key.as_bytes())
             .expect("Verifying key already is validated");
@@ -153,7 +130,7 @@ impl AppState {
             api::Host {
                 name: acceptance.hostname,
                 last_ping: first_ping.clone(),
-                provision_state: state,
+                provision_state: api::ProvisionState::NotSet,
                 version_history: vec![(attempt.store_path, first_ping)],
             },
         );
@@ -247,21 +224,9 @@ impl AppState {
         substitutor: String,
         netrc: Option<String>,
     ) {
-        let unknown_hosts = hosts
+        let _unknown_hosts = hosts
             .extract_if(|name, _store| !self.hosts.contains_key(name))
             .collect::<HashMap<String, api::StorePath>>();
-
-        for (host, store_path) in unknown_hosts {
-            self.pre_register_host(
-                host.clone(),
-                api::ProvisionState::Provisioned(api::RemoteStorePath {
-                    store_path: store_path.clone(),
-                    substitutor: substitutor.clone(),
-                    public_key: public_key.clone(),
-                    netrc: netrc.clone(),
-                }),
-            );
-        }
 
         for (name, store_path) in hosts {
             let host = self
@@ -299,14 +264,6 @@ impl AppState {
         self.hosts.values()
     }
 
-    pub(crate) fn host_by_name(&self, hostname: String) -> Option<api::Host> {
-        self.hosts.get(&hostname).cloned()
-    }
-
-    pub(crate) fn registered_hosts(&self) -> HashMap<String, api::ProvisionState> {
-        self.pre_register_host.clone()
-    }
-
     pub(crate) fn hosts_by_key(&self) -> HashMap<Hostname, VerifyingKey> {
         self.host_by_key
             .clone()
@@ -342,9 +299,4 @@ impl AppState {
     pub fn get_key_by_id<S: AsRef<str>>(&self, keyid: S) -> Option<VerifyingKey> {
         self.keyids.get(keyid.as_ref()).copied()
     }
-}
-
-#[cfg(test)]
-mod test_state {
-    use crate::state::AppState;
 }
