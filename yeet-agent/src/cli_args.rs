@@ -123,6 +123,9 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Query the status of all hosts
+    Hosts,
+
     /// These are the raw subcommands to execute functions on the server
     Server(ServerArgs),
 }

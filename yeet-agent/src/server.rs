@@ -42,6 +42,17 @@ pub async fn get_registered_hosts<K: SigningKey + Sync>(
         .await
 }
 
+pub async fn get_hosts<K: SigningKey + Sync>(url: &Url, key: &K) -> Result<Vec<api::Host>, Report> {
+    Client::new()
+        .get(url.join("/status")?)
+        .sign(&sig_param(key)?, key)
+        .await?
+        .send()
+        .await?
+        .error_for_json()
+        .await
+}
+
 pub async fn register<K: SigningKey + Sync>(
     url: &Url,
     key: &K,

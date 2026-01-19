@@ -21,6 +21,7 @@ mod sig {
     pub mod ssh;
 }
 mod notification;
+mod section_impls;
 mod status;
 mod systemd;
 mod varlink;
@@ -61,6 +62,10 @@ async fn main() -> Result<(), Report> {
         .extract()?;
 
     match args.command {
+        Commands::Approve { name, code, facter } => {
+            cli::approve(&config, facter, code, name).await?
+        }
+        Commands::Hosts => cli::hosts(&config).await?,
         Commands::Notify => notification::notify()?,
         Commands::Agent {
             server,

@@ -4,13 +4,20 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use console::style;
 use inquire::validator::Validation;
 use log::info;
 use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use tokio::fs::read_to_string;
 use yeet::{cachix, server};
 
-use crate::{cli_args::Config, nix, sig::ssh, varlink};
+use crate::{
+    cli_args::Config,
+    nix,
+    section::{self, ColoredDisplay, DisplaySectionItem},
+    sig::ssh,
+    varlink,
+};
 
 pub async fn publish(
     config: &Config,
@@ -194,5 +201,54 @@ pub async fn approve(
 
     File::create_new(&facter_output)?.write_all(nixos_facter.as_bytes())?;
     info!("File {} written", facter_output.as_os_str().display());
+    Ok(())
+}
+
+pub async fn hosts(config: &Config) -> Result<(), Report> {
+    let agent_url = {
+        let agent_config = varlink::config().await;
+        if let Err(e) = &agent_config {
+            log::error!("Could not get agent config: {e}")
+        }
+        agent_config.ok().map(|config| config.server)
+    };
+
+    let url = &config
+        .url
+        .clone()
+        .or(agent_url)
+        .ok_or(rootcause::report!("`--url` required for publish"))?;
+
+    let secret_key = {
+        let domain = url
+            .domain()
+            .ok_or(rootcause::report!("Provided URL has no domain part"))?;
+        &ssh::key_by_url(domain)?
+    };
+
+    let registered_hosts_section: (String, Vec<(String, String)>) = {
+        let hosts = server::get_registered_hosts(&url, secret_key).await?;
+
+        (
+            style("Pre-Registered Hosts:").underlined().to_string(),
+            hosts
+                .into_iter()
+                .map(|(k, v)| (k, v.colored_display()))
+                .collect(),
+        )
+    };
+
+    let hosts_section: (String, Vec<(String, String)>) = {
+        let mut hosts = server::get_hosts(&url, secret_key).await?;
+        hosts.sort_by_key(|h| h.name.clone());
+
+        (
+            style("Hosts:").underlined().to_string(),
+            hosts.into_iter().map(|h| h.as_section_item()).collect(),
+        )
+    };
+
+    section::print_sections(&[registered_hosts_section, hosts_section]);
+
     Ok(())
 }

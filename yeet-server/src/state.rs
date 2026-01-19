@@ -207,19 +207,24 @@ impl AppState {
 
         let action = match host.provision_state.clone() {
             api::ProvisionState::NotSet => api::AgentAction::Nothing,
+            // Host is detached -> only updated the latest version
             api::ProvisionState::Detached => {
                 if host.latest_store_path() != &store_path {
                     host.update_store_path(store_path);
                 }
                 api::AgentAction::Detach
             }
+
             api::ProvisionState::Provisioned(version) => {
+                // Host has completed an update -> update last seen store path
                 if &store_path != host.latest_store_path() {
                     host.update_store_path(store_path.clone());
                 }
+                // Host is on the newest version
                 if store_path == version.store_path {
                     api::AgentAction::Nothing
                 } else {
+                    // Host needs to update
                     // TODO: we do not see if we updated fast in succession we only see the latest
                     api::AgentAction::SwitchTo(version.clone())
                 }

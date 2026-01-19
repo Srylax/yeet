@@ -4,6 +4,14 @@ pub trait DisplaySection {
     fn as_section(&self) -> Section;
 }
 
+pub trait DisplaySectionItem {
+    fn as_section_item(&self) -> (String, String);
+}
+
+pub trait ColoredDisplay {
+    fn colored_display(&self) -> String;
+}
+
 macro_rules! section {
     ( $title:expr => [ $( $k:expr, $v:expr ),* $(,)? ] ) => {
         ( $title.to_string(),

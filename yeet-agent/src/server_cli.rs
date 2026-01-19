@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    fs::{File, read_to_string},
-    io::Write as _,
-};
+use std::{collections::HashMap, fs::read_to_string};
 
 use api::key::{get_secret_key, get_verify_key};
 use log::info;

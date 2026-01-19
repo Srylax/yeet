@@ -55,6 +55,25 @@ pub fn host(host: &api::Host) -> Result<String, Report> {
     Ok(String::from_utf8(w)?)
 }
 
+pub fn time_diff(zoned: &Zoned, unit: Unit, threshold: f64, smallest: Unit) -> String {
+    let span = (zoned - &jiff::Zoned::now())
+        .round(
+            jiff::SpanRound::new()
+                .largest(jiff::Unit::Month)
+                .smallest(smallest)
+                .relative(zoned)
+                .mode(jiff::RoundMode::Trunc),
+        )
+        .unwrap();
+
+    if span.total((unit, zoned)).unwrap().abs() < threshold {
+        style(format!("{span:#}")).green().bold()
+    } else {
+        style(format!("{span:#}")).red().bold()
+    }
+    .to_string()
+}
+
 pub fn diff_inline<T: similar::DiffableStrRef + ?Sized>(old: &T, new: &T) -> String {
     let diff = TextDiff::configure().diff_unicode_words(old, new);
 

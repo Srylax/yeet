@@ -131,22 +131,12 @@ struct SystemInfo {
 
 impl DisplaySection for SystemInfo {
     fn as_section(&self) -> Section {
-        let build_date_span = {
-            let zoned = self.build_date.to_zoned(TimeZone::system()).unwrap();
-            let last_build = (&zoned - &jiff::Zoned::now())
-                .round(
-                    jiff::SpanRound::new()
-                        .smallest(jiff::Unit::Minute)
-                        .mode(jiff::RoundMode::Trunc),
-                )
-                .unwrap();
-
-            if last_build.total(jiff::Unit::Hour).unwrap() < 24_f64 {
-                style(last_build).green().bold()
-            } else {
-                style(last_build).red().bold()
-            }
-        };
+        let build_date_span = display::time_diff(
+            &self.build_date.to_zoned(TimeZone::system()).unwrap(),
+            jiff::Unit::Hour,
+            24_f64,
+            jiff::Unit::Minute,
+        );
 
         let os_version = if self.nixos_version.starts_with("dirty") {
             style(&self.nixos_version).red().bold()
@@ -164,7 +154,7 @@ impl DisplaySection for SystemInfo {
             style("System:").underlined() => [
                 "Kernel", self.kernel,
                 "NixOS version", format!("{} Generation {}", os_version, style(self.current_generation).bold()),
-                "Build date", format!("\u{2514}\u{2500}{}; {:#} ago",self.build_date, build_date_span),
+                "Build date", format!("\u{2514}\u{2500}{}; {}",self.build_date, build_date_span),
                 "Variant", variant,
                 "Conf revision", self.configuration_revision[..8],
                 "Nixpkgs version", self.nixpkgs_revision[..8],
