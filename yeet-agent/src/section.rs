@@ -8,8 +8,8 @@ pub trait DisplaySectionItem {
     fn as_section_item(&self) -> (String, String);
 }
 
-pub trait ColoredDisplay {
-    fn colored_display(&self) -> String;
+pub trait ColoredDisplay<D> {
+    fn colored_display(&self) -> StyledObject<D>;
 }
 
 macro_rules! section {
@@ -19,6 +19,7 @@ macro_rules! section {
         )
     };
 }
+use console::StyledObject;
 pub(crate) use section;
 
 pub fn print_sections(sections: &[Section]) {

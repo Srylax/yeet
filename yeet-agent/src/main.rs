@@ -65,7 +65,7 @@ async fn main() -> Result<(), Report> {
         Commands::Approve { name, code, facter } => {
             cli::approve(&config, facter, code, name).await?
         }
-        Commands::Hosts => cli::hosts(&config).await?,
+        Commands::Hosts { full } => cli::hosts(&config, full).await?,
         Commands::Notify => notification::notify()?,
         Commands::Agent {
             server,

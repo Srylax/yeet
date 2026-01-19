@@ -124,7 +124,11 @@ pub enum Commands {
     },
 
     /// Query the status of all hosts
-    Hosts,
+    Hosts {
+        /// Filter for some hosts
+        #[arg(long)]
+        full: bool,
+    },
 
     /// These are the raw subcommands to execute functions on the server
     Server(ServerArgs),

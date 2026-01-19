@@ -14,7 +14,7 @@ use yeet::{cachix, server};
 use crate::{
     cli_args::Config,
     nix,
-    section::{self, ColoredDisplay, DisplaySectionItem},
+    section::{self, ColoredDisplay, DisplaySection as _, DisplaySectionItem},
     sig::ssh,
     varlink,
 };
@@ -204,7 +204,7 @@ pub async fn approve(
     Ok(())
 }
 
-pub async fn hosts(config: &Config) -> Result<(), Report> {
+pub async fn hosts(config: &Config, full: bool) -> Result<(), Report> {
     let agent_url = {
         let agent_config = varlink::config().await;
         if let Err(e) = &agent_config {
@@ -226,29 +226,47 @@ pub async fn hosts(config: &Config) -> Result<(), Report> {
         &ssh::key_by_url(domain)?
     };
 
-    let registered_hosts_section: (String, Vec<(String, String)>) = {
-        let hosts = server::get_registered_hosts(&url, secret_key).await?;
+    let mut sections = Vec::new();
 
-        (
-            style("Pre-Registered Hosts:").underlined().to_string(),
-            hosts
-                .into_iter()
-                .map(|(k, v)| (k, v.colored_display()))
-                .collect(),
-        )
-    };
+    {
+        let registered_hosts_section: (String, Vec<(String, String)>) = {
+            let hosts = server::get_registered_hosts(&url, secret_key).await?;
 
-    let hosts_section: (String, Vec<(String, String)>) = {
+            (
+                style("Pre-Registered Hosts:").underlined().to_string(),
+                hosts
+                    .into_iter()
+                    .map(|(k, v)| (k, v.colored_display().to_string()))
+                    .collect(),
+            )
+        };
+        sections.push(registered_hosts_section);
+    }
+
+    let hosts_section: Vec<(String, Vec<(String, String)>)> = {
         let mut hosts = server::get_hosts(&url, secret_key).await?;
         hosts.sort_by_key(|h| h.name.clone());
 
-        (
-            style("Hosts:").underlined().to_string(),
-            hosts.into_iter().map(|h| h.as_section_item()).collect(),
-        )
-    };
+        if full {
+            let hostnames = hosts.iter().map(|h| h.name.clone()).collect();
+            let selected =
+                inquire::MultiSelect::new("Which hosts do you want to display>", hostnames)
+                    .prompt()?;
+            hosts.retain(|h| selected.contains(&h.name));
+        }
 
-    section::print_sections(&[registered_hosts_section, hosts_section]);
+        if full {
+            hosts.into_iter().map(|h| h.as_section()).collect()
+        } else {
+            vec![(
+                style("Hosts:").underlined().to_string(),
+                hosts.into_iter().map(|h| h.as_section_item()).collect(),
+            )]
+        }
+    };
+    sections.extend(hosts_section);
+
+    section::print_sections(&sections);
 
     Ok(())
 }
