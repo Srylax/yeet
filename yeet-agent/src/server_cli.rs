@@ -112,21 +112,6 @@ pub async fn handle_server_commands(args: ServerArgs, config: &Config) -> Result
             .await?;
             info!("{code}");
         }
-        ServerCommands::VerifyAttempt { name, code, facter } => {
-            let artifacts = server::verify_attempt(
-                &url,
-                &get_secret_key(&httpsig_key)?,
-                &api::VerificationAcceptance {
-                    code,
-                    host_name: name,
-                },
-            )
-            .await?;
-            if let Some(nixos_facter) = artifacts.nixos_facter {
-                File::create_new(&facter)?.write_all(nixos_facter.as_bytes())?;
-                info!("File {} written", facter.as_os_str().display());
-            }
-        }
         ServerCommands::AddKey { key, admin } => {
             let level = if admin == AuthLevel::Admin {
                 api::AuthLevel::Admin

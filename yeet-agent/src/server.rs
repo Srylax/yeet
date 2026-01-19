@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::{collections::HashMap, sync::LazyLock};
 
 use api::httpsig::ReqwestSig as _;
 use http::StatusCode;
@@ -25,6 +25,20 @@ pub async fn status<K: SigningKey + Sync>(url: &Url, key: &K) -> Result<Vec<api:
         .send()
         .await?
         .error_for_json::<Vec<api::Host>>()
+        .await
+}
+
+pub async fn get_registered_hosts<K: SigningKey + Sync>(
+    url: &Url,
+    key: &K,
+) -> Result<HashMap<String, api::ProvisionState>, Report> {
+    Client::new()
+        .get(url.join("/status/registered")?)
+        .sign(&sig_param(key)?, key)
+        .await?
+        .send()
+        .await?
+        .error_for_json()
         .await
 }
 

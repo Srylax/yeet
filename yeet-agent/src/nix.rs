@@ -6,6 +6,7 @@ use std::{
     process::{Command, Stdio},
 };
 
+use inquire::{list_option::ListOption, validator::Validation};
 use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -114,6 +115,21 @@ pub fn list_hosts(flake_path: &str, darwin: bool) -> Result<Vec<String>, Report>
         .wait_with_output()?;
 
     Ok(serde_json::from_slice(&output.stdout)?)
+}
+
+pub fn get_hosts(flake_path: &str, darwin: bool) -> Result<Vec<String>, Report> {
+    let detected_hosts = list_hosts(flake_path, darwin)?;
+    Ok(
+        inquire::MultiSelect::new("Which host(s) would you like to publish>", detected_hosts)
+            .with_validator(|list: &[ListOption<&String>]| {
+                if list.len() < 1 {
+                    return Ok(Validation::Invalid("You must select a host!".into()));
+                } else {
+                    Ok(Validation::Valid)
+                }
+            })
+            .prompt()?,
+    )
 }
 
 #[derive(Serialize, Deserialize)]

@@ -70,7 +70,7 @@ pub struct VerificationArtifacts {
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 pub struct VerificationAcceptance {
     pub code: u32,
-    pub host_name: String,
+    pub hostname: String,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq)]

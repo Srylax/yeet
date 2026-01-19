@@ -132,8 +132,8 @@ impl AppState {
 
         // check if the host is registered before we remove the verification attempt
         // else we would remove it and wont have an attemp if the host is not registered
-        if !self.pre_register_host.contains_key(&acceptance.host_name) {
-            return Err(StateError::PreRegisterNotFound(acceptance.host_name));
+        if !self.pre_register_host.contains_key(&acceptance.hostname) {
+            return Err(StateError::PreRegisterNotFound(acceptance.hostname));
         }
 
         let (attempt, first_ping) = self
@@ -141,20 +141,17 @@ impl AppState {
             .remove(&acceptance.code)
             .ok_or(StateError::AttemptNotFound(acceptance.code))?;
 
-        let state = self
-            .pre_register_host
-            .remove(&acceptance.host_name)
-            .unwrap();
+        let state = self.pre_register_host.remove(&acceptance.hostname).unwrap();
 
         let signing_key = PublicKey::from_bytes(AlgorithmName::Ed25519, attempt.key.as_bytes())
             .expect("Verifying key already is validated");
 
         self.host_by_key
-            .insert(attempt.key, acceptance.host_name.clone());
+            .insert(attempt.key, acceptance.hostname.clone());
         self.hosts.insert(
-            acceptance.host_name.clone(),
+            acceptance.hostname.clone(),
             api::Host {
-                name: acceptance.host_name,
+                name: acceptance.hostname,
                 last_ping: first_ping.clone(),
                 provision_state: state,
                 version_history: vec![(attempt.store_path, first_ping)],

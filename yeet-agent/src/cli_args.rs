@@ -75,6 +75,18 @@ pub enum Commands {
         #[arg(long)]
         facter: bool,
     },
+    /// Approve a pending key verification with the corresponding code
+    Approve {
+        /// Hostname
+        #[arg(index = 1)]
+        name: Option<String>,
+        /// Verification code
+        #[arg(index = 2)]
+        code: Option<u32>,
+        /// Facter output file
+        #[arg(long)]
+        facter: Option<PathBuf>,
+    },
     /// Build and then publish some or all hosts in a flake
     Publish {
         /// Path to flake
@@ -183,18 +195,6 @@ pub enum ServerCommands {
         /// Facter input file
         #[arg(long)]
         facter: Option<PathBuf>,
-    },
-    /// Approve a pending key verification with the corresponding code
-    VerifyAttempt {
-        /// Pet name for the host
-        #[arg(index = 1)]
-        name: String,
-        /// Verification code
-        #[arg(index = 2)]
-        code: u32,
-        /// Facter output file
-        #[arg(long)]
-        facter: PathBuf,
     },
     /// Add a new admin or build key to the server
     AddKey {

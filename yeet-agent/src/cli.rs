@@ -1,6 +1,10 @@
-use std::path::PathBuf;
+use std::{
+    fs::File,
+    io::Write as _,
+    path::{Path, PathBuf},
+};
 
-use inquire::{list_option::ListOption, validator::Validation};
+use inquire::validator::Validation;
 use log::info;
 use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use tokio::fs::read_to_string;
@@ -29,9 +33,12 @@ pub async fn publish(
         .clone()
         .or(agent_url)
         .ok_or(rootcause::report!("`--url` required for publish"))?;
-    let domain = url
-        .domain()
-        .ok_or(rootcause::report!("Provided URL has no domain part"))?;
+    let secret_key = {
+        let domain = url
+            .domain()
+            .ok_or(rootcause::report!("Provided URL has no domain part"))?;
+        &ssh::key_by_url(domain)?
+    };
 
     let cachix = config.cachix.clone().ok_or(report!(
         "Cachix cache name required. Set it in config or via the --cachix flag"
@@ -61,7 +68,7 @@ pub async fn publish(
     };
 
     let host = if host.is_empty() {
-        get_hosts(&path.to_string_lossy(), darwin)?
+        nix::get_hosts(&path.to_string_lossy(), darwin)?
     } else {
         host
     };
@@ -80,7 +87,7 @@ pub async fn publish(
 
     server::update(
         &url,
-        &ssh::key_by_url(domain)?,
+        secret_key,
         &api::HostUpdateRequest {
             hosts,
             public_key,
@@ -92,17 +99,100 @@ pub async fn publish(
     Ok(())
 }
 
-pub fn get_hosts(flake_path: &str, darwin: bool) -> Result<Vec<String>, Report> {
-    let detected_hosts = nix::list_hosts(flake_path, darwin)?;
-    Ok(
-        inquire::MultiSelect::new("Which host(s) would you like to publish>", detected_hosts)
-            .with_validator(|list: &[ListOption<&String>]| {
-                if list.len() < 1 {
-                    return Ok(Validation::Invalid("You must select a host!".into()));
-                } else {
-                    Ok(Validation::Valid)
-                }
-            })
-            .prompt()?,
+pub async fn approve(
+    config: &Config,
+    facter_output: Option<PathBuf>,
+    code: Option<u32>,
+    hostname: Option<String>,
+) -> Result<(), Report> {
+    let agent_url = {
+        let agent_config = varlink::config().await;
+        if let Err(e) = &agent_config {
+            log::error!("Could not get agent config: {e}")
+        }
+        agent_config.ok().map(|config| config.server)
+    };
+
+    let url = &config
+        .url
+        .clone()
+        .or(agent_url)
+        .ok_or(rootcause::report!("`--url` required for publish"))?;
+
+    let secret_key = {
+        let domain = url
+            .domain()
+            .ok_or(rootcause::report!("Provided URL has no domain part"))?;
+        &ssh::key_by_url(domain)?
+    };
+
+    let hostname = {
+        if let Some(hostname) = hostname {
+            hostname
+        } else {
+            let hosts: Vec<String> = server::get_registered_hosts(&url, secret_key)
+                .await?
+                .keys()
+                .cloned()
+                .collect();
+
+            inquire::Select::new("Host>", hosts).prompt()?
+        }
+    };
+
+    let code = {
+        if let Some(code) = code {
+            code
+        } else {
+            inquire::CustomType::<u32>::new("Approval code:").prompt()?
+        }
+    };
+
+    info!("Approving {hostname} with code {code}...");
+
+    let artifacts = server::verify_attempt(
+        &url,
+        secret_key,
+        &api::VerificationAcceptance { code, hostname },
     )
+    .await?;
+
+    info!("Approved");
+
+    if artifacts.nixos_facter.is_none() {
+        return Ok(());
+    }
+    let nixos_facter = artifacts.nixos_facter.unwrap();
+
+    // Get file to write facter data
+    let facter_output = {
+        if let Some(facter_output) = facter_output {
+            facter_output
+        } else {
+            let output = inquire::Text::new("Facter Output:")
+                .with_validator(|path: &str| {
+                    let Some(parent_dir) = Path::new(path).parent() else {
+                        return Ok(Validation::Invalid("Not a directory".into()));
+                    };
+
+                    if !parent_dir.exists() {
+                        return Ok(Validation::Invalid("Directory does not exist".into()));
+                    }
+
+                    if Path::new(path).exists() {
+                        return Ok(Validation::Invalid(
+                            format!("{path} already exists!").into(),
+                        ));
+                    }
+
+                    Ok(Validation::Valid)
+                })
+                .prompt()?;
+            PathBuf::from(output)
+        }
+    };
+
+    File::create_new(&facter_output)?.write_all(nixos_facter.as_bytes())?;
+    info!("File {} written", facter_output.as_os_str().display());
+    Ok(())
 }
