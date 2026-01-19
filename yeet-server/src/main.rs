@@ -1,25 +1,33 @@
 //! Yeet that Config
 
-use std::{env,
-          fs::{File, OpenOptions, rename},
-          hash::{DefaultHasher, Hash as _, Hasher as _},
-          os::unix::prelude::FileExt as _,
-          sync::Arc,
-          time::Duration};
+use std::{
+    env,
+    fs::{File, OpenOptions, rename},
+    hash::{DefaultHasher, Hash as _, Hasher as _},
+    os::unix::prelude::FileExt as _,
+    sync::Arc,
+    time::Duration,
+};
 
 use api::key::get_verify_key;
-use axum::{Router,
-           routing::{get, post}};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use parking_lot::RwLock;
 use routes::status;
 use tokio::{net::TcpListener, time::interval};
 
-use crate::{routes::{key::{add_key, remove_key},
-                     register::register_host,
-                     system_check::system_check,
-                     update::update_hosts,
-                     verify::{add_verification_attempt, is_host_verified, verify_attempt}},
-            state::AppState}; // TODO: is this enough or do we need to use rand_chacha?
+use crate::{
+    routes::{
+        key::{add_key, remove_key},
+        register::register_host,
+        system_check::system_check,
+        update::update_hosts,
+        verify::{add_verification_attempt, is_host_verified, verify_attempt},
+    },
+    state::AppState,
+}; // TODO: is this enough or do we need to use rand_chacha?
 
 mod error;
 mod httpsig;
@@ -83,6 +91,9 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .route("/key/add", post(add_key))
         .route("/key/remove", post(remove_key))
         .route("/status", get(status::status))
+        .route("/status/{hostname}", get(status::status_by_name))
+        .route("/status/registered", get(status::get_registered_hosts))
+        .route("/status/host_by_key", get(status::hosts_by_key))
         .with_state(state)
 }
 

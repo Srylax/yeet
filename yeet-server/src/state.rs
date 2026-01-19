@@ -1,5 +1,7 @@
-use std::{cmp::Ordering,
-          collections::{HashMap, HashSet, hash_map}};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet, hash_map},
+};
 
 use axum::http::StatusCode;
 use axum_thiserror::ErrorStatus;
@@ -50,22 +52,24 @@ pub enum StateError {
 
 type Result<T> = core::result::Result<T, StateError>;
 
+type Hostname = String;
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct AppState {
     admin_credentials: HashSet<VerifyingKey>,
     build_machines_credentials: HashSet<VerifyingKey>,
-    // key -> Hosts
-    hosts: HashMap<String, api::Host>,
+    // hostname -> Hosts
+    hosts: HashMap<Hostname, api::Host>,
     //  keyid -> Key for httpsig
     keyids: HashMap<String, VerifyingKey>,
-    // Maps name to the public key
+    // Maps name to the hostname
     #[serde(with = "any_key_map")]
-    host_by_key: HashMap<VerifyingKey, String>,
+    host_by_key: HashMap<VerifyingKey, Hostname>,
     // 6 digit number -> unverified pub key
     verification_attempt: HashMap<u32, (api::VerificationAttempt, Zoned)>,
 
     // A list of hosts ready for registration
-    pre_register_host: HashMap<String, api::ProvisionState>,
+    pre_register_host: HashMap<Hostname, api::ProvisionState>,
 }
 
 impl AppState {
@@ -291,6 +295,22 @@ impl AppState {
 
     pub(crate) fn hosts(&self) -> hash_map::Values<'_, String, api::Host> {
         self.hosts.values()
+    }
+
+    pub(crate) fn host_by_name(&self, hostname: String) -> Option<api::Host> {
+        self.hosts.get(&hostname).cloned()
+    }
+
+    pub(crate) fn registered_hosts(&self) -> HashMap<String, api::ProvisionState> {
+        self.pre_register_host.clone()
+    }
+
+    pub(crate) fn hosts_by_key(&self) -> HashMap<Hostname, VerifyingKey> {
+        self.host_by_key
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (v, k))
+            .collect()
     }
 
     pub fn add_key(&mut self, key: VerifyingKey, level: api::AuthLevel) {
