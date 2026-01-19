@@ -70,7 +70,7 @@ impl AppState {
     fn drain_verification_attempts(&mut self) {
         self.verification_attempt.extract_if(|_key, (_kv, time)| {
             matches!(
-                (&Zoned::now() - &*time).compare(15.minutes()),
+                (&Zoned::now() - &*time).abs().compare(15.minutes()),
                 Ok(Ordering::Greater)
             )
         });
