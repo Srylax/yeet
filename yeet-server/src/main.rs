@@ -20,6 +20,7 @@ use tokio::{net::TcpListener, time::interval};
 
 use crate::{
     routes::{
+        host,
         key::{add_key, remove_key},
         system_check::system_check,
         update::update_hosts,
@@ -32,6 +33,7 @@ mod error;
 mod httpsig;
 mod state;
 mod routes {
+    pub mod host;
     pub mod key;
     pub mod status;
     pub mod system_check;
@@ -89,6 +91,8 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .route("/key/remove", post(remove_key))
         .route("/status", get(status::status))
         .route("/status/host_by_key", get(status::hosts_by_key))
+        .route("/host/remove", post(host::remove_host))
+        .route("/host/rename", post(host::rename_host))
         .with_state(state)
 }
 

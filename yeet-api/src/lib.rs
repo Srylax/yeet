@@ -31,6 +31,19 @@ pub struct HostUpdateRequest {
     pub netrc: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+/// Delete a host
+pub struct HostRemoveRequest {
+    pub hostname: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+/// Rename
+pub struct HostRenameRequest {
+    pub old_name: String,
+    pub new_name: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 /// Represents a Version
 /// Each Version can have its own nix cache

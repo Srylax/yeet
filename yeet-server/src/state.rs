@@ -58,7 +58,7 @@ pub struct AppState {
     hosts: HashMap<Hostname, api::Host>,
     //  keyid -> Key for httpsig
     keyids: HashMap<String, VerifyingKey>,
-    // Maps name to the hostname
+    // Maps key to the hostname
     #[serde(with = "any_key_map")]
     host_by_key: HashMap<VerifyingKey, Hostname>,
     // 6 digit number -> unverified pub key
@@ -290,6 +290,39 @@ impl AppState {
         self.build_machines_credentials.remove(key);
         self.host_by_key.remove(key);
         self.keyids.remove(&signing_key.key_id());
+    }
+
+    pub fn remove_host(&mut self, hostname: &Hostname) -> Result<api::Host> {
+        let host = self
+            .hosts
+            .remove(hostname)
+            .ok_or(StateError::HostNotFound)?;
+
+        let keys = self.host_by_key.extract_if(|_key, name| name == hostname);
+
+        for (key, _hostname) in keys {
+            let _ = self.keyids.extract_if(|_id, k| k == &key);
+        }
+
+        Ok(host)
+    }
+
+    pub fn rename_host(&mut self, old_name: &Hostname, new_name: Hostname) -> Result<()> {
+        let host = self
+            .hosts
+            .remove(old_name)
+            .ok_or(StateError::HostNotFound)?;
+        self.hosts.insert(new_name.clone(), host);
+
+        if let Some((_key, hostname)) = self
+            .host_by_key
+            .iter_mut()
+            .find(|(_key, name)| *name == old_name)
+        {
+            *hostname = new_name;
+        }
+
+        Ok(())
     }
 
     pub fn has_admin_credential(&self) -> bool {
