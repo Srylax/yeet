@@ -1,12 +1,10 @@
-use std::{fmt::Display, path::Path};
+use std::fmt::Display;
 
-use api::key::get_secret_key;
 use console::style;
 use jiff::tz::TimeZone;
 use rootcause::{Report, prelude::ResultExt as _};
 use serde::{Deserialize, Serialize};
-use url::Url;
-use yeet::{display, nix, server};
+use yeet::{display, nix};
 
 use crate::{
     section::{self, DisplaySection, Section, section},
@@ -181,20 +179,4 @@ fn system_info() -> Result<SystemInfo, Report> {
         nixpkgs_revision: nixos_version.nixpkgs_revision,
         current_generation: generation.generation,
     })
-}
-
-async fn server_status(url: &Url, httpsig_key: &Path) -> Result<Vec<api::Host>, Report> {
-    server::status(url, &get_secret_key(httpsig_key)?).await
-}
-
-pub(crate) async fn status_string(url: &Url, httpsig_key: &Path) -> Result<String, Report> {
-    let rows = {
-        let status = server_status(url, httpsig_key).await?;
-        status
-            .into_iter()
-            .map(|host| display::host(&host))
-            .collect::<Result<Vec<_>, Report>>()?
-    };
-
-    Ok(rows.join("\n"))
 }
