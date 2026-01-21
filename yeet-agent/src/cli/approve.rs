@@ -38,20 +38,16 @@ pub async fn approve(
         &ssh::key_by_url(domain)?
     };
 
-    let hostname = {
-        if let Some(hostname) = hostname {
-            hostname
-        } else {
-            inquire::Text::new("Hostname:").prompt()?
-        }
+    let hostname = if let Some(hostname) = hostname {
+        hostname
+    } else {
+        inquire::Text::new("Hostname:").prompt()?
     };
 
-    let code = {
-        if let Some(code) = code {
-            code
-        } else {
-            inquire::CustomType::<u32>::new("Approval code:").prompt()?
-        }
+    let code = if let Some(code) = code {
+        code
+    } else {
+        inquire::CustomType::<u32>::new("Approval code:").prompt()?
     };
 
     info!("Approving {hostname} with code {code}...");
@@ -71,31 +67,29 @@ pub async fn approve(
     let nixos_facter = artifacts.nixos_facter.unwrap();
 
     // Get file to write facter data
-    let facter_output = {
-        if let Some(facter_output) = facter_output {
-            facter_output
-        } else {
-            let output = inquire::Text::new("Facter Output:")
-                .with_validator(|path: &str| {
-                    let Some(parent_dir) = Path::new(path).parent() else {
-                        return Ok(Validation::Invalid("Not a directory".into()));
-                    };
+    let facter_output = if let Some(facter_output) = facter_output {
+        facter_output
+    } else {
+        let output = inquire::Text::new("Facter Output:")
+            .with_validator(|path: &str| {
+                let Some(parent_dir) = Path::new(path).parent() else {
+                    return Ok(Validation::Invalid("Not a directory".into()));
+                };
 
-                    if !parent_dir.exists() {
-                        return Ok(Validation::Invalid("Directory does not exist".into()));
-                    }
+                if !parent_dir.exists() {
+                    return Ok(Validation::Invalid("Directory does not exist".into()));
+                }
 
-                    if Path::new(path).exists() {
-                        return Ok(Validation::Invalid(
-                            format!("{path} already exists!").into(),
-                        ));
-                    }
+                if Path::new(path).exists() {
+                    return Ok(Validation::Invalid(
+                        format!("{path} already exists!").into(),
+                    ));
+                }
 
-                    Ok(Validation::Valid)
-                })
-                .prompt()?;
-            PathBuf::from(output)
-        }
+                Ok(Validation::Valid)
+            })
+            .prompt()?;
+        PathBuf::from(output)
     };
 
     File::create_new(&facter_output)?.write_all(nixos_facter.as_bytes())?;

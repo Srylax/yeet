@@ -145,6 +145,38 @@ pub async fn remove_key<K: SigningKey + Sync>(
         .await
 }
 
+pub async fn remove_host<K: SigningKey + Sync>(
+    url: &Url,
+    key: &K,
+    request: &api::HostRemoveRequest,
+) -> Result<api::Host, Report> {
+    Client::new()
+        .post(url.join("/host/remove")?)
+        .json(request)
+        .sign(&sig_param(key)?, key)
+        .await?
+        .send()
+        .await?
+        .error_for_json()
+        .await
+}
+
+pub async fn rename_host<K: SigningKey + Sync>(
+    url: &Url,
+    key: &K,
+    request: &api::HostRenameRequest,
+) -> Result<StatusCode, Report> {
+    Client::new()
+        .post(url.join("/host/rename")?)
+        .json(request)
+        .sign(&sig_param(key)?, key)
+        .await?
+        .send()
+        .await?
+        .error_for_code()
+        .await
+}
+
 fn sig_param<K: SigningKey + Sync>(key: &K) -> Result<HttpSignatureParams, Report> {
     let mut signature_params = HttpSignatureParams::try_new(&COMPONENTS)?;
     signature_params.set_key_info(key);

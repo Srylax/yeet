@@ -23,12 +23,13 @@ pub async fn remove_host(
 pub async fn rename_host(
     State(state): State<Arc<RwLock<AppState>>>,
     HttpSig(key): HttpSig,
-    VerifiedJson(api::HostRenameRequest { old_name, new_name }): VerifiedJson<
-        api::HostRenameRequest,
-    >,
+    VerifiedJson(api::HostRenameRequest {
+        current_name,
+        new_name,
+    }): VerifiedJson<api::HostRenameRequest>,
 ) -> Result<StatusCode, StateError> {
     let mut state = state.write_arc();
     state.auth_admin(&key)?;
-    state.rename_host(&old_name, new_name)?;
+    state.rename_host(&current_name, new_name)?;
     Ok(StatusCode::OK)
 }

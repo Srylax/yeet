@@ -40,7 +40,7 @@ pub struct HostRemoveRequest {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 /// Rename
 pub struct HostRenameRequest {
-    pub old_name: String,
+    pub current_name: String,
     pub new_name: String,
 }
 

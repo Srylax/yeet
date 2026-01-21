@@ -10,7 +10,7 @@ use figment::{
 use rootcause::{Report, hooks::Hooks};
 use yeet::nix::{self};
 
-use crate::cli_args::{AgentConfig, Commands, Config, Yeet};
+use crate::cli_args::{AgentConfig, Commands, Config, HostArgs, Yeet};
 
 mod agent;
 mod cli_args;
@@ -21,6 +21,7 @@ mod sig {
 }
 mod cli {
     pub mod approve;
+    pub mod host;
     pub mod hosts;
     pub mod publish;
 }
@@ -69,6 +70,12 @@ async fn main() -> Result<(), Report> {
         Commands::Approve { name, code, facter } => {
             cli::approve::approve(&config, facter, code, name).await?
         }
+        Commands::Host(HostArgs { command }) => match command {
+            cli_args::HostCommands::Rename { name, new } => {
+                cli::host::rename(&config, name, new).await?
+            }
+            cli_args::HostCommands::Remove { name } => cli::host::remove(&config, name).await?,
+        },
         Commands::Hosts { full } => cli::hosts::hosts(&config, full).await?,
         Commands::Notify => notification::notify()?,
         Commands::Agent {

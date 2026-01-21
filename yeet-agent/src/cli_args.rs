@@ -132,6 +132,31 @@ pub enum Commands {
 
     /// These are the raw subcommands to execute functions on the server
     Server(ServerArgs),
+    Host(HostArgs),
+}
+#[derive(Args)]
+pub struct HostArgs {
+    #[command(subcommand)]
+    pub command: HostCommands,
+}
+
+#[derive(Subcommand)]
+pub enum HostCommands {
+    /// Rename an existing yeet host
+    Rename {
+        /// The current name of the host
+        #[arg(long)]
+        name: Option<String>,
+        /// The new name for the host
+        #[arg(long)]
+        new: Option<String>,
+    },
+    /// Delete an host including all authentication info
+    Remove {
+        /// The name of the host
+        #[arg(long)]
+        name: Option<String>,
+    },
 }
 
 #[derive(Args)]
