@@ -1,3 +1,4 @@
+use console::style;
 use log::info;
 use rootcause::Report;
 use yeet::server;
@@ -31,7 +32,9 @@ pub async fn remove(config: &Config, hostname: Option<String>) -> Result<(), Rep
     } else {
         let hostnames = {
             let hosts = server::get_hosts(&url, secret_key).await?;
-            hosts.iter().map(|h| h.name.clone()).collect()
+            let mut hostnames: Vec<_> = hosts.iter().map(|h| h.name.clone()).collect();
+            hostnames.sort();
+            hostnames
         };
         let selected =
             inquire::Select::new("Which host do you want to delete>", hostnames).prompt()?;
@@ -39,9 +42,13 @@ pub async fn remove(config: &Config, hostname: Option<String>) -> Result<(), Rep
     };
 
     // The user has to confirm the action
-    let confirm = inquire::Confirm::new(&format!(
-        "Are you sure you want to delete {hostname}. This action is not reversable"
-    ))
+    let confirm = inquire::Confirm::new(
+        &style(format!(
+            "Are you sure you want to delete {hostname}. This action is not reversable"
+        ))
+        .red()
+        .to_string(),
+    )
     .with_default(false)
     .prompt()?;
 
@@ -92,8 +99,11 @@ pub async fn rename(
     } else {
         let hostnames = {
             let hosts = server::get_hosts(&url, secret_key).await?;
-            hosts.iter().map(|h| h.name.clone()).collect()
+            let mut hostnames: Vec<_> = hosts.into_iter().map(|h| h.name).collect();
+            hostnames.sort();
+            hostnames
         };
+
         let selected =
             inquire::Select::new("Which host do you want to rename>", hostnames).prompt()?;
         selected
