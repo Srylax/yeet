@@ -308,10 +308,11 @@ impl AppState {
     }
 
     pub fn rename_host(&mut self, old_name: &Hostname, new_name: Hostname) -> Result<()> {
-        let host = self
+        let mut host = self
             .hosts
             .remove(old_name)
             .ok_or(StateError::HostNotFound)?;
+        host.name = new_name.clone(); // Make sure the two names are the same
         self.hosts.insert(new_name.clone(), host);
 
         if let Some((_key, hostname)) = self
