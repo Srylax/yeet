@@ -4,9 +4,11 @@ use axum::{extract::State, http::StatusCode};
 use ed25519_dalek::VerifyingKey;
 use parking_lot::RwLock;
 
-use crate::{AppState,
-            httpsig::{HttpSig, VerifiedJson},
-            state::StateError};
+use crate::{
+    AppState,
+    httpsig::{HttpSig, VerifiedJson},
+    state::StateError,
+};
 
 pub async fn add_key(
     State(state): State<Arc<RwLock<AppState>>>,

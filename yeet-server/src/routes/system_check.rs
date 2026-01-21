@@ -3,9 +3,11 @@ use std::sync::Arc;
 use axum::{Json, extract::State};
 use parking_lot::RwLock;
 
-use crate::{AppState,
-            httpsig::{HttpSig, VerifiedJson},
-            state::StateError};
+use crate::{
+    AppState,
+    httpsig::{HttpSig, VerifiedJson},
+    state::StateError,
+};
 
 pub async fn system_check(
     State(state): State<Arc<RwLock<AppState>>>,

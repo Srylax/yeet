@@ -13,12 +13,16 @@ use yeet::nix::{self};
 use crate::cli_args::{AgentConfig, Commands, Config, Yeet};
 
 mod agent;
-mod cli;
 mod cli_args;
 mod section;
 mod server_cli;
 mod sig {
     pub mod ssh;
+}
+mod cli {
+    pub mod approve;
+    pub mod hosts;
+    pub mod publish;
 }
 mod notification;
 mod section_impls;
@@ -63,9 +67,9 @@ async fn main() -> Result<(), Report> {
 
     match args.command {
         Commands::Approve { name, code, facter } => {
-            cli::approve(&config, facter, code, name).await?
+            cli::approve::approve(&config, facter, code, name).await?
         }
-        Commands::Hosts { full } => cli::hosts(&config, full).await?,
+        Commands::Hosts { full } => cli::hosts::hosts(&config, full).await?,
         Commands::Notify => notification::notify()?,
         Commands::Agent {
             server,
@@ -89,7 +93,7 @@ async fn main() -> Result<(), Report> {
             netrc,
             variant,
         } => {
-            cli::publish(&config, path, host, netrc, variant, darwin).await?;
+            cli::publish::publish(&config, path, host, netrc, variant, darwin).await?;
         }
         Commands::Server(args) => server_cli::handle_server_commands(args, &config).await?,
     }

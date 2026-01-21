@@ -3,9 +3,11 @@ use std::sync::Arc;
 use axum::{extract::State, http::StatusCode};
 use parking_lot::RwLock;
 
-use crate::{AppState,
-            httpsig::{HttpSig, VerifiedJson},
-            state::StateError};
+use crate::{
+    AppState,
+    httpsig::{HttpSig, VerifiedJson},
+    state::StateError,
+};
 
 /// Endpoint to set a new version for a host.
 /// The whole request needs to be signed by a build machine.

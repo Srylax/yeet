@@ -1,8 +1,9 @@
 use std::{fs::read_to_string, io, path::Path};
 
-use ed25519_dalek::{SigningKey,
-                    VerifyingKey,
-                    pkcs8::{DecodePrivateKey, DecodePublicKey}};
+use ed25519_dalek::{
+    SigningKey, VerifyingKey,
+    pkcs8::{DecodePrivateKey, DecodePublicKey},
+};
 use httpsig_hyper::prelude::{AlgorithmName, SecretKey};
 use ssh_key::{PrivateKey, PublicKey};
 use thiserror::Error;

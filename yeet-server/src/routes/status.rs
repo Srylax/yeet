@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use axum::{Json, extract::State};
-
 use ed25519_dalek::VerifyingKey;
 use parking_lot::RwLock;
 

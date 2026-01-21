@@ -1,7 +1,7 @@
-use httpsig_hyper::{ContentDigest as _,
-                    MessageSignatureReq as _,
-                    RequestContentDigest as _,
-                    prelude::{HttpSignatureParams, SigningKey}};
+use httpsig_hyper::{
+    ContentDigest as _, MessageSignatureReq as _, RequestContentDigest as _,
+    prelude::{HttpSignatureParams, SigningKey},
+};
 use reqwest::RequestBuilder;
 use thiserror::Error;
 
