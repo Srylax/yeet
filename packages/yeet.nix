@@ -38,6 +38,9 @@ rustPlatform.buildRustPackage {
         pkgs.nix
       ]
     }
+
+    mkdir -p $out/share/polkit-1/actions/
+    cp share/polkit-1/actions/* $out/share/polkit-1/actions/
   '';
 
   meta = {

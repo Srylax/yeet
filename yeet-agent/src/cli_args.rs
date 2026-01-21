@@ -123,6 +123,9 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Detach your current system from the yeet server
+    Detach,
+
     /// Query the status of all hosts
     Hosts {
         /// Filter for some hosts

@@ -21,6 +21,7 @@ mod sig {
 }
 mod cli {
     pub mod approve;
+    pub mod detach;
     pub mod host;
     pub mod hosts;
     pub mod publish;
@@ -67,6 +68,7 @@ async fn main() -> Result<(), Report> {
         .extract()?;
 
     match args.command {
+        Commands::Detach => cli::detach::detach().await?,
         Commands::Approve { name, code, facter } => {
             cli::approve::approve(&config, facter, code, name).await?
         }
