@@ -2,6 +2,7 @@ use std::{
     os::unix::fs::{PermissionsExt, lchown},
     path::Path,
 };
+use zlink::Listener;
 
 use api::AgentAction;
 use httpsig_hyper::prelude::SecretKey;
@@ -12,14 +13,21 @@ use tokio::fs::{self, remove_file};
 use url::Url;
 use yeet::server;
 use zlink::{
-    Call, Connection, ReplyError, Service, connection::Socket, proxy, service::MethodReply, unix,
+    Call, Connection, ReplyError, Service,
+    connection::{
+        Socket,
+        socket::{FetchPeerCredentials, UnixSocket},
+    },
+    proxy,
+    service::MethodReply,
+    unix,
 };
 
 shadow_rs::shadow!(build);
 
 use crate::{
     cli_args::{self, AgentConfig},
-    version,
+    polkit, version,
 };
 
 const SOCKET_PATH: &str = "/run/yeet/agent.varlink";
@@ -31,12 +39,18 @@ pub enum YeetMethod {
     Status,
     #[serde(rename = "ch.yeetme.yeet.Config")]
     Config,
+    #[serde(rename = "ch.yeetme.yeet.Detach")]
+    Detach { version: api::StorePath },
 }
 
 #[proxy("ch.yeetme.yeet")]
 pub trait YeetProxy {
     async fn status(&mut self) -> zlink::Result<Result<DaemonStatus, YeetDaemonError>>;
     async fn config(&mut self) -> zlink::Result<Result<AgentConfig, YeetDaemonError>>;
+    async fn detach(
+        &mut self,
+        version: api::StorePath,
+    ) -> zlink::Result<Result<(), YeetDaemonError>>;
 }
 
 pub async fn client() -> Result<Connection<zlink::unix::Stream>, Error> {
@@ -61,6 +75,16 @@ pub async fn config() -> Result<AgentConfig, Error> {
     let mut client = client().await?;
     client
         .config()
+        .await
+        .context("Could not communicate with the varlink daemon")
+        .map_err(ReportAsError::from)?
+        .map_err(|e| Error::DaemonError(e))
+}
+
+pub async fn detach(version: api::StorePath) -> Result<(), Error> {
+    let mut client = client().await?;
+    client
+        .detach(version)
         .await
         .context("Could not communicate with the varlink daemon")
         .map_err(ReportAsError::from)?
@@ -109,6 +133,7 @@ pub enum DaemonMode {
 #[zlink(interface = "ch.yeetme.yeet")]
 pub enum YeetDaemonError {
     NoCurrentSystem,
+    CredentialError,
 }
 
 pub struct YeetVarlinkService {
@@ -126,21 +151,24 @@ impl Service for YeetVarlinkService {
 
     type ReplyError<'ser> = YeetDaemonError;
 
-    async fn handle<'ser, 'de: 'ser, Sock: Socket>(
+    async fn handle<'ser, Sock: Socket>(
         &'ser mut self,
-        method: Call<Self::MethodCall<'de>>,
+        method: &'ser Call<Self::MethodCall<'_>>,
         _conn: &mut Connection<Sock>,
-    ) -> MethodReply<Self::ReplyParams<'ser>, Self::ReplyStream, Self::ReplyError<'ser>> {
+    ) -> MethodReply<Self::ReplyParams<'ser>, Self::ReplyStream, Self::ReplyError<'ser>>
+// where
+    //     <Sock as zlink::connection::Socket>::ReadHalf: zlink::connection::socket::UnixSocket,
+    {
         match method.method() {
             YeetMethod::Status => {
                 log::debug!("Varlink: Daemon status requested");
 
-                let verified =
-                            //TODO unwrap
-                            match server::is_host_verified(&self.config.server, &self.key).await {
-                                Ok(verified) => Some(verified.is_success()),
-                                Err(_) => None,
-                            };
+                //TODO unwrap
+                let verified = match server::is_host_verified(&self.config.server, &self.key).await
+                {
+                    Ok(verified) => Some(verified.is_success()),
+                    Err(_) => None,
+                };
 
                 let system_check = {
                     let Ok(store_path) = version::get_active_version() else {
@@ -185,6 +213,10 @@ impl Service for YeetVarlinkService {
                 })))
             }
             YeetMethod::Config => MethodReply::Single(Some(YeetReply::Config(self.config.clone()))),
+            YeetMethod::Detach { version } => {
+                // polkit::detach(pid, uid);
+                todo!()
+            }
         }
     }
 }
@@ -196,8 +228,14 @@ impl YeetVarlinkService {
             fs::create_dir_all(Path::new(SOCKET_PATH).parent().unwrap())
                 .await
                 .context("Ensuring the Socket dir is available")?;
-            let listener = unix::bind(SOCKET_PATH).attach(format!("SOCKET_PATH: {SOCKET_PATH}"))?;
+            let mut listener =
+                zlink::unix::bind(SOCKET_PATH).attach(format!("SOCKET_PATH: {SOCKET_PATH}"))?;
+            let con = listener.accept().await.unwrap();
+            con.peer_credentials();
+
             setup_socket_permissions(SOCKET_PATH, "yeet").await?;
+
+            todo!()
             listener
         };
 

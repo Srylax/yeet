@@ -27,6 +27,7 @@ mod cli {
     pub mod publish;
 }
 mod notification;
+mod polkit;
 mod section_impls;
 mod status;
 mod systemd;
@@ -68,7 +69,7 @@ async fn main() -> Result<(), Report> {
         .extract()?;
 
     match args.command {
-        Commands::Detach => cli::detach::detach().await?,
+        Commands::Detach { version } => cli::detach::detach(&config, version).await?,
         Commands::Approve { name, code, facter } => {
             cli::approve::approve(&config, facter, code, name).await?
         }

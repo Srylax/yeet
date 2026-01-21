@@ -124,7 +124,11 @@ pub enum Commands {
     },
 
     /// Detach your current system from the yeet server
-    Detach,
+    Detach {
+        /// NixOS system path to switch to
+        #[arg(long)]
+        version: Option<api::StorePath>,
+    },
 
     /// Query the status of all hosts
     Hosts {
