@@ -24,157 +24,236 @@ pub async fn status<K: SigningKey + Sync>(url: &Url, key: &K) -> Result<Vec<api:
         .await?
         .send()
         .await?
-        .error_for_json::<Vec<api::Host>>()
-        .await
-}
-
-pub async fn get_hosts<K: SigningKey + Sync>(url: &Url, key: &K) -> Result<Vec<api::Host>, Report> {
-    Client::new()
-        .get(url.join("/status")?)
-        .sign(&sig_param(key)?, key)
-        .await?
-        .send()
-        .await?
         .error_for_json()
         .await
 }
 
-pub async fn update<K: SigningKey + Sync>(
-    url: &Url,
-    key: &K,
-    host_update_request: &api::HostUpdateRequest,
-) -> Result<StatusCode, Report> {
-    Client::new()
-        .post(url.join("/system/update")?)
-        .json(host_update_request)
-        .sign(&sig_param(key)?, key)
-        .await?
-        .send()
-        .await?
-        .error_for_code()
-        .await
+pub mod key {
+    use api::httpsig::ReqwestSig as _;
+    use http::StatusCode;
+    use httpsig_hyper::prelude::*;
+    use reqwest::Client;
+    use rootcause::Report;
+    use url::Url;
+
+    use crate::server::{ErrorForJson as _, sig_param};
+
+    pub async fn add_key<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+        add_key: &api::AddKey,
+    ) -> Result<StatusCode, Report> {
+        Client::new()
+            .post(url.join("/key/add")?)
+            .json(add_key)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_code()
+            .await
+    }
+
+    pub async fn remove_key<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+        remove_key: &ed25519_dalek::VerifyingKey,
+    ) -> Result<StatusCode, Report> {
+        Client::new()
+            .post(url.join("/key/remove")?)
+            .json(remove_key)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_code()
+            .await
+    }
 }
 
-pub async fn is_host_verified<K: SigningKey + Sync>(
-    url: &Url,
-    key: &K,
-) -> Result<StatusCode, Report> {
-    Ok(Client::new()
-        .get(url.join("/system/verify")?)
-        .sign(&sig_param(key)?, key)
-        .await?
-        .send()
-        .await?
-        .status())
+pub mod host {
+    use api::httpsig::ReqwestSig as _;
+    use http::StatusCode;
+    use httpsig_hyper::prelude::*;
+    use reqwest::Client;
+    use rootcause::Report;
+    use url::Url;
+
+    use crate::server::{ErrorForJson as _, sig_param};
+
+    pub async fn remove_host<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+        request: &api::HostRemoveRequest,
+    ) -> Result<api::Host, Report> {
+        Client::new()
+            .post(url.join("/host/remove")?)
+            .json(request)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_json()
+            .await
+    }
+
+    pub async fn rename_host<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+        request: &api::HostRenameRequest,
+    ) -> Result<StatusCode, Report> {
+        Client::new()
+            .post(url.join("/host/rename")?)
+            .json(request)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_code()
+            .await
+    }
+}
+pub mod system {
+
+    use api::httpsig::ReqwestSig as _;
+    use http::StatusCode;
+    use httpsig_hyper::prelude::*;
+    use reqwest::Client;
+    use rootcause::Report;
+    use url::Url;
+
+    use crate::server::{ErrorForJson as _, sig_param};
+
+    pub async fn check<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+        version: &api::VersionRequest,
+    ) -> Result<api::AgentAction, Report> {
+        Client::new()
+            .post(url.join("/system/check")?)
+            .json(version)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_json()
+            .await
+    }
+
+    pub async fn update<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+        host_update_request: &api::HostUpdateRequest,
+    ) -> Result<StatusCode, Report> {
+        Client::new()
+            .post(url.join("/system/update")?)
+            .json(host_update_request)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_code()
+            .await
+    }
+
+    pub async fn is_host_verified<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+    ) -> Result<StatusCode, Report> {
+        Ok(Client::new()
+            .get(url.join("/system/verify")?)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .status())
+    }
+
+    pub async fn add_verification_attempt(
+        url: &Url,
+        attempt: &api::VerificationAttempt,
+    ) -> Result<u32, Report> {
+        Client::new()
+            .post(url.join("/system/verify")?)
+            .json(attempt)
+            .send()
+            .await?
+            .error_for_json()
+            .await
+    }
+
+    pub async fn verify_attempt<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+        acceptance: &api::VerificationAcceptance,
+    ) -> Result<api::VerificationArtifacts, Report> {
+        Client::new()
+            .post(url.join("/system/verify/accept")?)
+            .json(acceptance)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_json()
+            .await
+    }
+
+    pub async fn detach<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+        detach: &api::DetachAction,
+    ) -> Result<StatusCode, Report> {
+        Client::new()
+            .post(url.join("/system/detach")?)
+            .json(detach)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_code()
+            .await
+    }
+
+    pub async fn detach_permission<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+    ) -> Result<bool, Report> {
+        Client::new()
+            .get(url.join("/system/detach/permission")?)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_json()
+            .await
+    }
 }
 
-pub async fn add_verification_attempt(
-    url: &Url,
-    attempt: &api::VerificationAttempt,
-) -> Result<u32, Report> {
-    Client::new()
-        .post(url.join("/system/verify")?)
-        .json(attempt)
-        .send()
-        .await?
-        .error_for_json()
-        .await
-}
+pub mod detach {
+    use api::httpsig::ReqwestSig as _;
+    use http::StatusCode;
+    use httpsig_hyper::prelude::*;
+    use reqwest::Client;
+    use rootcause::Report;
+    use url::Url;
 
-pub async fn verify_attempt<K: SigningKey + Sync>(
-    url: &Url,
-    key: &K,
-    acceptance: &api::VerificationAcceptance,
-) -> Result<api::VerificationArtifacts, Report> {
-    Client::new()
-        .post(url.join("/system/verify/accept")?)
-        .json(acceptance)
-        .sign(&sig_param(key)?, key)
-        .await?
-        .send()
-        .await?
-        .error_for_json()
-        .await
-}
+    use crate::server::{ErrorForJson as _, sig_param};
 
-pub async fn system_check<K: SigningKey + Sync>(
-    url: &Url,
-    key: &K,
-    version: &api::VersionRequest,
-) -> Result<api::AgentAction, Report> {
-    Client::new()
-        .post(url.join("/system/check")?)
-        .json(version)
-        .sign(&sig_param(key)?, key)
-        .await?
-        .send()
-        .await?
-        .error_for_json()
-        .await
-}
-
-pub async fn add_key<K: SigningKey + Sync>(
-    url: &Url,
-    key: &K,
-    add_key: &api::AddKey,
-) -> Result<StatusCode, Report> {
-    Client::new()
-        .post(url.join("/key/add")?)
-        .json(add_key)
-        .sign(&sig_param(key)?, key)
-        .await?
-        .send()
-        .await?
-        .error_for_code()
-        .await
-}
-
-pub async fn remove_key<K: SigningKey + Sync>(
-    url: &Url,
-    key: &K,
-    remove_key: &ed25519_dalek::VerifyingKey,
-) -> Result<StatusCode, Report> {
-    Client::new()
-        .post(url.join("/key/remove")?)
-        .json(remove_key)
-        .sign(&sig_param(key)?, key)
-        .await?
-        .send()
-        .await?
-        .error_for_code()
-        .await
-}
-
-pub async fn remove_host<K: SigningKey + Sync>(
-    url: &Url,
-    key: &K,
-    request: &api::HostRemoveRequest,
-) -> Result<api::Host, Report> {
-    Client::new()
-        .post(url.join("/host/remove")?)
-        .json(request)
-        .sign(&sig_param(key)?, key)
-        .await?
-        .send()
-        .await?
-        .error_for_json()
-        .await
-}
-
-pub async fn rename_host<K: SigningKey + Sync>(
-    url: &Url,
-    key: &K,
-    request: &api::HostRenameRequest,
-) -> Result<StatusCode, Report> {
-    Client::new()
-        .post(url.join("/host/rename")?)
-        .json(request)
-        .sign(&sig_param(key)?, key)
-        .await?
-        .send()
-        .await?
-        .error_for_code()
-        .await
+    pub async fn set_detach_permission<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+        permission: &api::SetDetachPermission,
+    ) -> Result<StatusCode, Report> {
+        Client::new()
+            .post(url.join("/detach/permission")?)
+            .json(permission)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_code()
+            .await
+    }
 }
 
 fn sig_param<K: SigningKey + Sync>(key: &K) -> Result<HttpSignatureParams, Report> {

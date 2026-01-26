@@ -150,6 +150,7 @@ pub struct Host {
     pub provision_state: ProvisionState,
     // Version with date when the update occured
     pub version_history: Vec<(StorePath, Zoned)>,
+    pub detach_allowed: Option<bool>,
 }
 
 impl Host {
@@ -168,6 +169,20 @@ impl Host {
     pub fn push_update(&mut self, version: RemoteStorePath) {
         if self.is_provisioned() || self.is_notset() {
             self.provision_state = ProvisionState::Provisioned(version);
+        } else if self.is_detached() {
+            self.provision_state = ProvisionState::Detached(version)
+        }
+    }
+
+    pub fn detach(&mut self) {
+        if let ProvisionState::Provisioned(version) = &self.provision_state {
+            self.provision_state = ProvisionState::Detached(version.clone());
+        }
+    }
+
+    pub fn attach(&mut self) {
+        if let ProvisionState::Detached(version) = &self.provision_state {
+            self.provision_state = ProvisionState::Provisioned(version.clone());
         }
     }
 
@@ -186,7 +201,7 @@ impl Host {
     pub fn is_detached(&self) -> bool {
         match self.provision_state {
             ProvisionState::NotSet | ProvisionState::Provisioned(_) => false,
-            ProvisionState::Detached => true,
+            ProvisionState::Detached(_) => true,
         }
     }
 
@@ -194,14 +209,14 @@ impl Host {
     pub fn is_provisioned(&self) -> bool {
         match self.provision_state {
             ProvisionState::Provisioned(_) => true,
-            ProvisionState::NotSet | ProvisionState::Detached => false,
+            ProvisionState::NotSet | ProvisionState::Detached(_) => false,
         }
     }
 
     #[must_use]
     pub fn is_notset(&self) -> bool {
         match self.provision_state {
-            ProvisionState::Provisioned(_) | ProvisionState::Detached => false,
+            ProvisionState::Provisioned(_) | ProvisionState::Detached(_) => false,
             ProvisionState::NotSet => true,
         }
     }
@@ -212,7 +227,7 @@ impl Host {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ProvisionState {
     NotSet,
-    Detached,
+    Detached(RemoteStorePath),
     Provisioned(RemoteStorePath),
 }
 
@@ -252,6 +267,20 @@ impl Default for AgentAction {
 #[expect(clippy::exhaustive_structs)]
 pub struct VersionRequest {
     pub store_path: StorePath,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum SetDetachPermission {
+    Global(bool),
+    PerHost(Vec<(String, bool)>),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum DetachAction {
+    DetachSelf,
+    DetachHost(String),
+    AttachSelf,
+    AttachHost(String),
 }
 
 #[inline]

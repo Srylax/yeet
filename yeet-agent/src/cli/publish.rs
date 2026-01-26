@@ -80,7 +80,7 @@ pub async fn publish(
 
     cachix::push_paths(hosts.values(), &cachix).await?;
 
-    server::update(
+    server::system::update(
         &url,
         secret_key,
         &api::HostUpdateRequest {

@@ -2,7 +2,6 @@ use std::{
     os::unix::fs::{PermissionsExt, lchown},
     path::Path,
 };
-use zlink::Listener;
 
 use api::AgentAction;
 use httpsig_hyper::prelude::SecretKey;
@@ -13,21 +12,14 @@ use tokio::fs::{self, remove_file};
 use url::Url;
 use yeet::server;
 use zlink::{
-    Call, Connection, ReplyError, Service,
-    connection::{
-        Socket,
-        socket::{FetchPeerCredentials, UnixSocket},
-    },
-    proxy,
-    service::MethodReply,
-    unix,
+    Call, Connection, ReplyError, Service, connection::Socket, proxy, service::MethodReply, unix,
 };
 
 shadow_rs::shadow!(build);
 
 use crate::{
     cli_args::{self, AgentConfig},
-    polkit, version,
+    version,
 };
 
 const SOCKET_PATH: &str = "/run/yeet/agent.varlink";
@@ -164,18 +156,18 @@ impl Service for YeetVarlinkService {
                 log::debug!("Varlink: Daemon status requested");
 
                 //TODO unwrap
-                let verified = match server::is_host_verified(&self.config.server, &self.key).await
-                {
-                    Ok(verified) => Some(verified.is_success()),
-                    Err(_) => None,
-                };
+                let verified =
+                    match server::system::is_host_verified(&self.config.server, &self.key).await {
+                        Ok(verified) => Some(verified.is_success()),
+                        Err(_) => None,
+                    };
 
                 let system_check = {
                     let Ok(store_path) = version::get_active_version() else {
                         return MethodReply::Error(YeetDaemonError::NoCurrentSystem);
                     };
 
-                    server::system_check(
+                    server::system::check(
                         &self.config.server,
                         &self.key,
                         &api::VersionRequest { store_path },
@@ -230,12 +222,9 @@ impl YeetVarlinkService {
                 .context("Ensuring the Socket dir is available")?;
             let mut listener =
                 zlink::unix::bind(SOCKET_PATH).attach(format!("SOCKET_PATH: {SOCKET_PATH}"))?;
-            let con = listener.accept().await.unwrap();
-            con.peer_credentials();
 
             setup_socket_permissions(SOCKET_PATH, "yeet").await?;
 
-            todo!()
             listener
         };
 

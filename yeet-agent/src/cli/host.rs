@@ -31,7 +31,7 @@ pub async fn remove(config: &Config, hostname: Option<String>) -> Result<(), Rep
         hostname
     } else {
         let hostnames = {
-            let hosts = server::get_hosts(&url, secret_key).await?;
+            let hosts = server::status(&url, secret_key).await?;
             let mut hostnames: Vec<_> = hosts.iter().map(|h| h.name.clone()).collect();
             hostnames.sort();
             hostnames
@@ -61,7 +61,7 @@ pub async fn remove(config: &Config, hostname: Option<String>) -> Result<(), Rep
 
     // no takies backsies past this point
 
-    server::remove_host(&url, secret_key, &api::HostRemoveRequest { hostname }).await?;
+    server::host::remove_host(&url, secret_key, &api::HostRemoveRequest { hostname }).await?;
 
     info!("Deleted!");
 
@@ -98,7 +98,7 @@ pub async fn rename(
         current_name
     } else {
         let hostnames = {
-            let hosts = server::get_hosts(&url, secret_key).await?;
+            let hosts = server::status(&url, secret_key).await?;
             let mut hostnames: Vec<_> = hosts.into_iter().map(|h| h.name).collect();
             hostnames.sort();
             hostnames
@@ -129,7 +129,7 @@ pub async fn rename(
 
     info!("Renaming {current_name} to {new_name}...");
 
-    server::rename_host(
+    server::host::rename_host(
         &url,
         secret_key,
         &api::HostRenameRequest {

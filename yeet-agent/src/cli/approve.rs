@@ -41,6 +41,7 @@ pub async fn approve(
     let hostname = if let Some(hostname) = hostname {
         hostname
     } else {
+        // TODO nix select
         inquire::Text::new("Hostname:").prompt()?
     };
 
@@ -52,7 +53,7 @@ pub async fn approve(
 
     info!("Approving {hostname} with code {code}...");
 
-    let artifacts = server::verify_attempt(
+    let artifacts = server::system::verify_attempt(
         &url,
         secret_key,
         &api::VerificationAcceptance { code, hostname },

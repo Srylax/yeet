@@ -44,6 +44,10 @@ pub enum StateError {
     #[error("Verification attempt with code {0} not found")]
     #[status(StatusCode::BAD_REQUEST)]
     AttemptNotFound(u32),
+
+    #[error("You have no permission to detach your host")]
+    #[status(StatusCode::FORBIDDEN)]
+    DetachNotAllowed,
 }
 
 type Result<T> = core::result::Result<T, StateError>;
@@ -63,6 +67,8 @@ pub struct AppState {
     host_by_key: HashMap<VerifyingKey, Hostname>,
     // 6 digit number -> unverified pub key
     verification_attempt: HashMap<u32, (api::VerificationAttempt, Zoned)>,
+    // Should hosts be allowed to detach by themself in general
+    detach_allowed: bool,
 }
 
 impl AppState {
@@ -132,6 +138,7 @@ impl AppState {
                 last_ping: first_ping.clone(),
                 provision_state: api::ProvisionState::NotSet,
                 version_history: vec![(attempt.store_path, first_ping)],
+                detach_allowed: None,
             },
         );
         self.keyids.insert(signing_key.key_id(), attempt.key);
@@ -185,7 +192,7 @@ impl AppState {
         let action = match host.provision_state.clone() {
             api::ProvisionState::NotSet => api::AgentAction::Nothing,
             // Host is detached -> only updated the latest version
-            api::ProvisionState::Detached => {
+            api::ProvisionState::Detached(_) => {
                 if host.latest_store_path() != &store_path {
                     host.update_store_path(store_path);
                 }
@@ -323,6 +330,81 @@ impl AppState {
             *hostname = new_name;
         }
 
+        Ok(())
+    }
+
+    pub fn set_global_detach_permission(&mut self, allowed: bool) {
+        self.detach_allowed = allowed;
+    }
+
+    pub fn set_detach_permissions(&mut self, hosts: Vec<(Hostname, bool)>) {
+        for (hostname, allowed) in hosts {
+            let Some(host) = self.hosts.get_mut(&hostname) else {
+                continue;
+            };
+            host.detach_allowed = Some(allowed);
+        }
+    }
+
+    pub fn is_detach_allowed(&self, key: &VerifyingKey) -> Result<bool> {
+        let host = {
+            let hostname = self.host_by_key.get(key).ok_or(StateError::HostNotFound)?;
+            self.hosts.get(hostname).ok_or(StateError::HostNotFound)?
+        };
+
+        Ok(host.detach_allowed.unwrap_or(self.detach_allowed))
+    }
+
+    pub fn detach_self(&mut self, key: &VerifyingKey) -> Result<()> {
+        let host = {
+            let hostname = self.host_by_key.get(key).ok_or(StateError::HostNotFound)?;
+            self.hosts
+                .get_mut(hostname)
+                .ok_or(StateError::HostNotFound)?
+        };
+
+        {
+            let allowed = host.detach_allowed.unwrap_or(self.detach_allowed);
+
+            if !allowed {
+                return Err(StateError::DetachNotAllowed);
+            }
+        };
+
+        host.detach();
+        Ok(())
+    }
+
+    // Warning: This should only ever be called by admins because it will bypass detach permissions
+    pub fn detach_host(&mut self, hostname: &Hostname) -> Result<()> {
+        let host = self
+            .hosts
+            .get_mut(hostname)
+            .ok_or(StateError::HostNotFound)?;
+
+        host.detach();
+        Ok(())
+    }
+
+    pub fn attach_self(&mut self, key: &VerifyingKey) -> Result<()> {
+        let host = {
+            let hostname = self.host_by_key.get(key).ok_or(StateError::HostNotFound)?;
+            self.hosts
+                .get_mut(hostname)
+                .ok_or(StateError::HostNotFound)?
+        };
+
+        host.attach();
+        Ok(())
+    }
+
+    pub fn attach_host(&mut self, hostname: &Hostname) -> Result<()> {
+        let host = self
+            .hosts
+            .get_mut(hostname)
+            .ok_or(StateError::HostNotFound)?;
+
+        host.attach();
         Ok(())
     }
 

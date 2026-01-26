@@ -8,7 +8,7 @@ impl ColoredDisplay<&str> for api::ProvisionState {
     fn colored_display(&self) -> StyledObject<&'static str> {
         match self {
             api::ProvisionState::NotSet => style("Not set").blue(),
-            api::ProvisionState::Detached => style("Detached").yellow(),
+            api::ProvisionState::Detached(_) => style("Detached").yellow(),
             api::ProvisionState::Provisioned(_remote_store_path) => style("Provisioned").green(),
         }
     }

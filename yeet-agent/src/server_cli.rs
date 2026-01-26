@@ -32,7 +32,7 @@ pub async fn handle_server_commands(args: ServerArgs, config: &Config) -> Result
                 ),
                 None => None,
             };
-            server::update(
+            server::system::update(
                 &url,
                 &get_secret_key(&httpsig_key)?,
                 &api::HostUpdateRequest {
@@ -45,7 +45,8 @@ pub async fn handle_server_commands(args: ServerArgs, config: &Config) -> Result
             .await?;
         }
         ServerCommands::VerifyStatus => {
-            let status = server::is_host_verified(&url, &get_secret_key(&httpsig_key)?).await?;
+            let status =
+                server::system::is_host_verified(&url, &get_secret_key(&httpsig_key)?).await?;
             info!("{status}");
         }
         ServerCommands::AddVerification {
@@ -59,7 +60,7 @@ pub async fn handle_server_commands(args: ServerArgs, config: &Config) -> Result
                 None
             };
 
-            let code = server::add_verification_attempt(
+            let code = server::system::add_verification_attempt(
                 &url,
                 &api::VerificationAttempt {
                     store_path,
@@ -76,7 +77,7 @@ pub async fn handle_server_commands(args: ServerArgs, config: &Config) -> Result
             } else {
                 api::AuthLevel::Build
             };
-            let status = server::add_key(
+            let status = server::key::add_key(
                 &url,
                 &get_secret_key(&httpsig_key)?,
                 &api::AddKey {
@@ -88,9 +89,12 @@ pub async fn handle_server_commands(args: ServerArgs, config: &Config) -> Result
             info!("{status}");
         }
         ServerCommands::RemoveKey { key } => {
-            let status =
-                server::remove_key(&url, &get_secret_key(&httpsig_key)?, &get_verify_key(&key)?)
-                    .await?;
+            let status = server::key::remove_key(
+                &url,
+                &get_secret_key(&httpsig_key)?,
+                &get_verify_key(&key)?,
+            )
+            .await?;
             info!("{status}");
         }
     }

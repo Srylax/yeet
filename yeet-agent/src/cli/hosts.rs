@@ -32,7 +32,7 @@ pub async fn hosts(config: &Config, full: bool) -> Result<(), Report> {
     };
 
     let hosts_section: Vec<(String, Vec<(String, String)>)> = {
-        let mut hosts = server::get_hosts(&url, secret_key).await?;
+        let mut hosts = server::status(&url, secret_key).await?;
         hosts.sort_by_key(|h| h.name.clone());
 
         if full {

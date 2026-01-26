@@ -1,9 +1,5 @@
-use std::io::Write as _;
-
-use api::hash_hex;
 use console::style;
-use jiff::{SpanRound, Unit, Zoned};
-use rootcause::Report;
+use jiff::{Unit, Zoned};
 use similar::{ChangeTag, DiffOp, TextDiff};
 
 // pub trait Fragment {
@@ -14,46 +10,6 @@ use similar::{ChangeTag, DiffOp, TextDiff};
 //         fragment.en
 //     }
 // }
-
-pub fn host(host: &api::Host) -> Result<String, Report> {
-    let status = match host.provision_state {
-        api::ProvisionState::NotSet => " (NotSet)",
-        api::ProvisionState::Detached => " (Detached)",
-        api::ProvisionState::Provisioned(_) => " (Provisioned)",
-    };
-
-    let mut w = Vec::new();
-    writeln!(&mut w, "{}{status}", host.name)?;
-
-    writeln!(
-        &mut w,
-        " \u{2022} Version: {}",
-        hash_hex(host.latest_store_path())
-    )?;
-
-    if let Some(next) = host.provision_state.store_path()
-        && next != host.latest_store_path()
-    {
-        writeln!(&mut w, " \u{2022} Next Version: {}", hash_hex(next))?;
-    }
-
-    writeln!(
-        &mut w,
-        " \u{2022} Last Seen: {}",
-        format!(
-            "{:#}",
-            (&Zoned::now() - &host.last_ping)
-                .round(
-                    SpanRound::new()
-                        .smallest(Unit::Second)
-                        .mode(jiff::RoundMode::Trunc)
-                )
-                .unwrap()
-        )
-    )?;
-
-    Ok(String::from_utf8(w)?)
-}
 
 pub fn time_diff(zoned: &Zoned, unit: Unit, threshold: f64, smallest: Unit) -> String {
     let span = (zoned - &jiff::Zoned::now())

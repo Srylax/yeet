@@ -63,7 +63,7 @@ async fn agent_loop(
     sleep: u64,
     facter: bool,
 ) -> Result<(), Report> {
-    let verified = server::is_host_verified(&config.server, key) //TODO unwrap
+    let verified = server::system::is_host_verified(&config.server, key) //TODO unwrap
         .await?
         .is_success();
 
@@ -81,7 +81,7 @@ async fn agent_loop(
             None
         };
 
-        let code = server::add_verification_attempt(
+        let code = server::system::add_verification_attempt(
             &config.server,
             &api::VerificationAttempt {
                 key: pub_key,
@@ -97,7 +97,7 @@ async fn agent_loop(
     info!("Verified!");
 
     loop {
-        let action = server::system_check(
+        let action = server::system::check(
             &config.server,
             key,
             &api::VersionRequest {
