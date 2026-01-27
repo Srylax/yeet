@@ -18,6 +18,15 @@ pub async fn is_detach_allowed(
     Ok(Json(state.is_detach_allowed(&key)?))
 }
 
+pub async fn is_detach_global_allowed(
+    State(state): State<Arc<RwLock<AppState>>>,
+    HttpSig(key): HttpSig,
+) -> Result<Json<bool>, StateError> {
+    let state = state.read_arc();
+    state.auth_admin(&key)?;
+    Ok(Json(state.get_global_detach_permission()))
+}
+
 /// Set the detach permission either Global or PerHost. PerHost will always take over the global setting
 pub async fn set_detach_permission(
     State(state): State<Arc<RwLock<AppState>>>,

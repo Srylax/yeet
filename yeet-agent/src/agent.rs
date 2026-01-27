@@ -36,7 +36,7 @@ pub async fn agent(config: &AgentConfig, sleep: u64, facter: bool) -> Result<(),
         let config = config.clone();
         let key = key.clone();
         tokio::task::spawn_local(async move {
-            if let Err(err) = varlink::YeetVarlinkService::start(config, key).await {
+            if let Err(err) = varlink::start_service(config, key).await {
                 log::error!("Varlink failure:\n{err}");
             }
         });
@@ -139,7 +139,13 @@ fn trusted_public_keys() -> Result<Vec<String>, Report> {
 
 fn update(version: &api::RemoteStorePath) -> Result<(), Report> {
     download(version)?;
-    activate(version)?;
+    activate(&version.store_path)?;
+    notification::notify_all()?;
+    Ok(())
+}
+
+pub fn switch_to(store_path: &api::StorePath) -> Result<(), Report> {
+    activate(store_path)?;
     notification::notify_all()?;
     Ok(())
 }
@@ -200,14 +206,14 @@ fn download(version: &api::RemoteStorePath) -> Result<(), Report> {
     Ok(())
 }
 
-fn set_system_profile(version: &api::RemoteStorePath) -> Result<(), Report> {
-    info!("Setting system profile to {}", version.store_path);
+fn set_system_profile(store_path: &api::StorePath) -> Result<(), Report> {
+    info!("Setting system profile to {}", store_path);
     let profile = Command::new("nix-env")
         .args([
             "--profile",
             "/nix/var/nix/profiles/system",
             "--set",
-            &version.store_path,
+            &store_path,
         ])
         .output()?;
     if !profile.status.success() {
@@ -217,20 +223,20 @@ fn set_system_profile(version: &api::RemoteStorePath) -> Result<(), Report> {
 }
 
 #[cfg(target_os = "macos")]
-fn activate(version: &api::RemoteStorePath) -> Result<(), Report> {
-    set_system_profile(version)?;
-    info!("Activating {}", version.store_path);
-    Command::new(Path::new(&version.store_path).join("activate"))
+fn activate(store_path: &api::StorePath) -> Result<(), Report> {
+    set_system_profile(store_path)?;
+    info!("Activating {}", store_path);
+    Command::new(Path::new(&store_path).join("activate"))
         .spawn()?
         .wait()?;
     Ok(())
 }
 
 #[cfg(target_os = "linux")]
-fn activate(version: &api::RemoteStorePath) -> Result<(), Report> {
-    info!("Activating {}", version.store_path);
-    set_system_profile(version)?;
-    Command::new(Path::new(&version.store_path).join("bin/switch-to-configuration"))
+fn activate(store_path: &api::StorePath) -> Result<(), Report> {
+    info!("Activating {}", store_path);
+    set_system_profile(store_path)?;
+    Command::new(Path::new(&store_path).join("bin/switch-to-configuration"))
         .arg("switch")
         .spawn()?
         .wait()?;

@@ -11,29 +11,18 @@ use serde::{Deserialize, Serialize};
 use tokio::fs::{self, remove_file};
 use url::Url;
 use yeet::server;
-use zlink::{
-    Call, Connection, ReplyError, Service, connection::Socket, proxy, service::MethodReply, unix,
-};
+use zlink::{Connection, ReplyError, connection::socket::FetchPeerCredentials, proxy, unix};
 
 shadow_rs::shadow!(build);
 
 use crate::{
+    agent,
     cli_args::{self, AgentConfig},
+    polkit::PolkitError,
     version,
 };
 
 const SOCKET_PATH: &str = "/run/yeet/agent.varlink";
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "method", content = "parameters")]
-pub enum YeetMethod {
-    #[serde(rename = "ch.yeetme.yeet.Status")]
-    Status,
-    #[serde(rename = "ch.yeetme.yeet.Config")]
-    Config,
-    #[serde(rename = "ch.yeetme.yeet.Detach")]
-    Detach { version: api::StorePath },
-}
 
 #[proxy("ch.yeetme.yeet")]
 pub trait YeetProxy {
@@ -42,6 +31,7 @@ pub trait YeetProxy {
     async fn detach(
         &mut self,
         version: api::StorePath,
+        force: bool,
     ) -> zlink::Result<Result<(), YeetDaemonError>>;
 }
 
@@ -65,18 +55,18 @@ pub async fn status() -> Result<DaemonStatus, Error> {
 
 pub async fn config() -> Result<AgentConfig, Error> {
     let mut client = client().await?;
-    client
+    Ok(client
         .config()
         .await
         .context("Could not communicate with the varlink daemon")
         .map_err(ReportAsError::from)?
-        .map_err(|e| Error::DaemonError(e))
+        .expect("Config can never Error because it does not return a result"))
 }
 
-pub async fn detach(version: api::StorePath) -> Result<(), Error> {
+pub async fn detach(version: api::StorePath, force: bool) -> Result<(), Error> {
     let mut client = client().await?;
     client
-        .detach(version)
+        .detach(version, force)
         .await
         .context("Could not communicate with the varlink daemon")
         .map_err(ReportAsError::from)?
@@ -91,11 +81,186 @@ pub enum Error {
     DaemonError(YeetDaemonError),
 }
 
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-pub enum YeetReply {
-    Status(DaemonStatus),
-    Config(AgentConfig),
+#[derive(Debug, ReplyError)]
+#[zlink(interface = "ch.yeetme.yeet")]
+pub enum YeetDaemonError {
+    NoCurrentSystem,
+    /// Could not connect to the yeet-server in an operation where it is required
+    NoConnectionToServer {
+        report: String,
+    },
+    CredentialError {
+        error: String,
+    },
+    /// Polkit was not able to perform authentication
+    PolkitError {
+        error: String,
+    },
+    /// Polkit authentication successfull but no permission
+    PolkitDetachNoPermission,
+    /// Detach not allowed by server. Use force=true to circumvent this
+    ServerDetachNoPermission,
+}
+
+impl From<std::io::Error> for YeetDaemonError {
+    fn from(value: std::io::Error) -> Self {
+        Self::CredentialError {
+            error: value.to_string(),
+        }
+    }
+}
+
+impl From<PolkitError> for YeetDaemonError {
+    fn from(value: PolkitError) -> Self {
+        Self::PolkitError {
+            error: value.to_string(),
+        }
+    }
+}
+impl From<Report> for YeetDaemonError {
+    fn from(value: Report) -> Self {
+        Self::NoConnectionToServer {
+            report: value.to_string(),
+        }
+    }
+}
+
+struct YeetVarlinkService {
+    pub config: cli_args::AgentConfig,
+    pub key: SecretKey,
+}
+
+#[zlink::service]
+impl<Sock> YeetVarlinkService
+where
+    Sock::ReadHalf: FetchPeerCredentials,
+{
+    #[zlink(interface = "ch.yeetme.yeet")]
+    pub async fn status(&self) -> Result<DaemonStatus, YeetDaemonError> {
+        log::debug!("Varlink: Daemon status requested");
+
+        //TODO unwrap
+        let verified = match server::system::is_host_verified(&self.config.server, &self.key).await
+        {
+            Ok(verified) => Some(verified.is_success()),
+            Err(_) => None,
+        };
+
+        let system_check = {
+            let Ok(store_path) = version::get_active_version() else {
+                return Err(YeetDaemonError::NoCurrentSystem);
+            };
+
+            server::system::check(
+                &self.config.server,
+                &self.key,
+                &api::VersionRequest { store_path },
+            )
+            .await
+        };
+
+        let up_to_date = match system_check {
+            Ok(AgentAction::Nothing) => UpToDate::Yes,
+            Ok(AgentAction::Detach) => UpToDate::Detached,
+            Ok(AgentAction::SwitchTo(_)) | Err(_) => UpToDate::No,
+        };
+
+        let mode = 'b: {
+            if let Some(verified) = verified
+                && !verified
+            {
+                break 'b DaemonMode::Unverified;
+            }
+
+            match system_check {
+                Ok(AgentAction::Nothing) | Ok(AgentAction::SwitchTo(_)) => DaemonMode::Provisioned,
+                Ok(AgentAction::Detach) => DaemonMode::Detached,
+                Err(_) => DaemonMode::NetworkError,
+            }
+        };
+
+        Ok(DaemonStatus {
+            up_to_date,
+            server: self.config.server.clone(),
+            mode,
+            version: String::from(build::PKG_VERSION),
+        })
+    }
+
+    pub async fn config(&self) -> AgentConfig {
+        self.config.clone()
+    }
+
+    pub async fn detach(
+        &self,
+        version: api::StorePath,
+        force: bool,
+        // #[zlink(connection)] conn: &mut zlink::Connection<Sock>,
+    ) -> Result<(), YeetDaemonError> {
+        // {
+        //     let credentials = conn.peer_credentials().await?;
+        //     let auth_result = polkit::detach(
+        //         credentials.process_id().as_raw_pid() as u32,
+        //         credentials.unix_user_id().as_raw(),
+        //     )
+        //     .await?;
+        //     if !auth_result.is_authorized {
+        //         return Err(YeetDaemonError::PolkitDetachNoPermission);
+        //     }
+        // }
+
+        // Force switches to the revision without signaling the server
+        // Meaning that once the agent gets the action to switch to the next revision this will be reverted
+        // Only use force on offline clients
+        if force {
+            agent::switch_to(&version);
+        }
+
+        // Check if the server allows switching
+        let permission = server::system::detach_permission(&self.config.server, &self.key).await?;
+        if !permission {
+            return Err(YeetDaemonError::ServerDetachNoPermission);
+        }
+
+        // Signal detaching to server
+        let _ = server::system::detach(
+            &self.config.server,
+            &self.key,
+            &api::DetachAction::DetachSelf,
+        )
+        .await?;
+
+        // Switch to version
+        agent::switch_to(&version);
+
+        Ok(())
+    }
+}
+
+pub async fn start_service(config: cli_args::AgentConfig, key: SecretKey) -> Result<(), Report> {
+    YeetVarlinkService::start(config, key).await
+}
+
+impl YeetVarlinkService {
+    pub async fn start(config: cli_args::AgentConfig, key: SecretKey) -> Result<(), Report> {
+        let listener = {
+            let _ = remove_file(SOCKET_PATH).await;
+            fs::create_dir_all(Path::new(SOCKET_PATH).parent().unwrap())
+                .await
+                .context("Ensuring the Socket dir is available")?;
+            let listener =
+                zlink::unix::bind(SOCKET_PATH).attach(format!("SOCKET_PATH: {SOCKET_PATH}"))?;
+
+            setup_socket_permissions(SOCKET_PATH, "yeet").await?;
+
+            listener
+        };
+
+        log::debug!("Socket created at {SOCKET_PATH}");
+        let server = zlink::Server::new(listener, Self { config, key });
+        log::info!("Listening for varlink connections");
+        server.run().await.map_err(std::convert::Into::into)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -119,120 +284,6 @@ pub enum DaemonMode {
     Unverified,
     Detached,
     NetworkError,
-}
-
-#[derive(Debug, ReplyError)]
-#[zlink(interface = "ch.yeetme.yeet")]
-pub enum YeetDaemonError {
-    NoCurrentSystem,
-    CredentialError,
-}
-
-pub struct YeetVarlinkService {
-    config: cli_args::AgentConfig,
-    key: SecretKey,
-}
-
-impl Service for YeetVarlinkService {
-    type MethodCall<'de> = YeetMethod;
-
-    type ReplyParams<'ser> = YeetReply;
-
-    type ReplyStreamParams = ();
-    type ReplyStream = futures_util::stream::Empty<zlink::Reply<()>>;
-
-    type ReplyError<'ser> = YeetDaemonError;
-
-    async fn handle<'ser, Sock: Socket>(
-        &'ser mut self,
-        method: &'ser Call<Self::MethodCall<'_>>,
-        _conn: &mut Connection<Sock>,
-    ) -> MethodReply<Self::ReplyParams<'ser>, Self::ReplyStream, Self::ReplyError<'ser>>
-// where
-    //     <Sock as zlink::connection::Socket>::ReadHalf: zlink::connection::socket::UnixSocket,
-    {
-        match method.method() {
-            YeetMethod::Status => {
-                log::debug!("Varlink: Daemon status requested");
-
-                //TODO unwrap
-                let verified =
-                    match server::system::is_host_verified(&self.config.server, &self.key).await {
-                        Ok(verified) => Some(verified.is_success()),
-                        Err(_) => None,
-                    };
-
-                let system_check = {
-                    let Ok(store_path) = version::get_active_version() else {
-                        return MethodReply::Error(YeetDaemonError::NoCurrentSystem);
-                    };
-
-                    server::system::check(
-                        &self.config.server,
-                        &self.key,
-                        &api::VersionRequest { store_path },
-                    )
-                    .await
-                };
-
-                let up_to_date = match system_check {
-                    Ok(AgentAction::Nothing) => UpToDate::Yes,
-                    Ok(AgentAction::Detach) => UpToDate::Detached,
-                    Ok(AgentAction::SwitchTo(_)) | Err(_) => UpToDate::No,
-                };
-
-                let mode = 'b: {
-                    if let Some(verified) = verified
-                        && !verified
-                    {
-                        break 'b DaemonMode::Unverified;
-                    }
-
-                    match system_check {
-                        Ok(AgentAction::Nothing) | Ok(AgentAction::SwitchTo(_)) => {
-                            DaemonMode::Provisioned
-                        }
-                        Ok(AgentAction::Detach) => DaemonMode::Detached,
-                        Err(_) => DaemonMode::NetworkError,
-                    }
-                };
-
-                MethodReply::Single(Some(YeetReply::Status(DaemonStatus {
-                    up_to_date,
-                    server: self.config.server.clone(),
-                    mode,
-                    version: String::from(build::PKG_VERSION),
-                })))
-            }
-            YeetMethod::Config => MethodReply::Single(Some(YeetReply::Config(self.config.clone()))),
-            YeetMethod::Detach { version } => {
-                // polkit::detach(pid, uid);
-                todo!()
-            }
-        }
-    }
-}
-
-impl YeetVarlinkService {
-    pub async fn start(config: cli_args::AgentConfig, key: SecretKey) -> Result<(), Report> {
-        let listener = {
-            let _ = remove_file(SOCKET_PATH).await;
-            fs::create_dir_all(Path::new(SOCKET_PATH).parent().unwrap())
-                .await
-                .context("Ensuring the Socket dir is available")?;
-            let mut listener =
-                zlink::unix::bind(SOCKET_PATH).attach(format!("SOCKET_PATH: {SOCKET_PATH}"))?;
-
-            setup_socket_permissions(SOCKET_PATH, "yeet").await?;
-
-            listener
-        };
-
-        log::debug!("Socket created at {SOCKET_PATH}");
-        let server = zlink::Server::new(listener, Self { config, key });
-        log::info!("Listening for varlink connections");
-        server.run().await.map_err(std::convert::Into::into)
-    }
 }
 
 async fn setup_socket_permissions(path: &str, group_name: &str) -> Result<(), Report> {

@@ -89,6 +89,15 @@ impl DisplaySection for api::Host {
             items.push(("Last seen".to_string(), last_seen.to_string()));
         }
 
+        if let Some(detach) = self.detach_allowed {
+            items.push((
+                "Detach allowed".to_string(),
+                style(format!("{} (overwritten)", detach))
+                    .blue()
+                    .to_string(),
+            ));
+        }
+
         (style(&self.name).underlined().to_string(), items)
     }
 }

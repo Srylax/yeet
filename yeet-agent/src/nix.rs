@@ -132,6 +132,11 @@ pub fn get_hosts(flake_path: &str, darwin: bool) -> Result<Vec<String>, Report> 
     )
 }
 
+pub fn get_host(flake_path: &str, darwin: bool) -> Result<String, Report> {
+    let detected_hosts = list_hosts(flake_path, darwin)?;
+    Ok(inquire::Select::new("Which host would you like to build>", detected_hosts).prompt()?)
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NixOSVersion {

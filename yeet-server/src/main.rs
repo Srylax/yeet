@@ -97,6 +97,7 @@ fn routes(state: Arc<RwLock<AppState>>) -> Router {
         .route("/system/detach", post(detach::detach_host))
         .route("/system/detach/permission", get(detach::is_detach_allowed))
         .route("/detach/permission", post(detach::set_detach_permission))
+        .route("/detach/permission", get(detach::is_detach_global_allowed))
         .with_state(state)
 }
 

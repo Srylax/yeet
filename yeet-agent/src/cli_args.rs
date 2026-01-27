@@ -128,6 +128,22 @@ pub enum Commands {
         /// NixOS system path to switch to
         #[arg(long)]
         version: Option<api::StorePath>,
+        /// Which hosts should be built? Defaults to current ARCH
+        #[arg(
+            long,
+            default_value_t = std::env::consts::ARCH == "aarch64",
+            default_missing_value = (std::env::consts::ARCH == "aarch64").to_string(),
+            num_args = 0..=1,
+            require_equals = false)]
+        darwin: bool,
+        /// Path to flake
+        #[arg(long, default_value = current_dir().unwrap().into_os_string())]
+        path: PathBuf,
+        /// This will bypass signaling the detachement to the server. Bypassing the permission check.
+        /// Required if your host is offline. The consequence will be that once your client gains connectivity to the yeet server,
+        /// your client will siwtch to the server version meaning that you will lose the changes made by the detachement.
+        #[arg(long, default_value_t = false)]
+        force: bool,
     },
 
     /// Query the status of all hosts

@@ -254,6 +254,20 @@ pub mod detach {
             .error_for_code()
             .await
     }
+
+    pub async fn get_detach_permission<K: SigningKey + Sync>(
+        url: &Url,
+        key: &K,
+    ) -> Result<bool, Report> {
+        Client::new()
+            .get(url.join("/detach/permission")?)
+            .sign(&sig_param(key)?, key)
+            .await?
+            .send()
+            .await?
+            .error_for_json()
+            .await
+    }
 }
 
 fn sig_param<K: SigningKey + Sync>(key: &K) -> Result<HttpSignatureParams, Report> {

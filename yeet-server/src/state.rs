@@ -337,6 +337,10 @@ impl AppState {
         self.detach_allowed = allowed;
     }
 
+    pub fn get_global_detach_permission(&self) -> bool {
+        self.detach_allowed
+    }
+
     pub fn set_detach_permissions(&mut self, hosts: Vec<(Hostname, bool)>) {
         for (hostname, allowed) in hosts {
             let Some(host) = self.hosts.get_mut(&hostname) else {

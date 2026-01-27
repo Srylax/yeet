@@ -69,7 +69,12 @@ async fn main() -> Result<(), Report> {
         .extract()?;
 
     match args.command {
-        Commands::Detach { version } => cli::detach::detach(&config, version).await?,
+        Commands::Detach {
+            version,
+            force,
+            darwin,
+            path,
+        } => cli::detach::detach(version, force, path, darwin).await?,
         Commands::Approve { name, code, facter } => {
             cli::approve::approve(&config, facter, code, name).await?
         }
