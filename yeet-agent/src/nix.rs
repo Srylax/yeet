@@ -11,6 +11,36 @@ use rootcause::{Report, bail, prelude::ResultExt as _, report};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub fn cmd_exists<T: AsRef<str>>(program: T) -> io::Result<()> {
+    let mut cmd = Command::new("sh");
+
+    let arg = {
+        cmd.arg("-c"); // invocation flag
+        format!("command -v {}", program.as_ref())
+    };
+
+    if cmd
+        .arg(arg)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()?
+        .success()
+    {
+        Ok(())
+    } else {
+        Err(io::ErrorKind::NotFound.into())
+    }
+}
+
+fn nom_or_nix() -> String {
+    if cmd_exists("nom").is_ok() {
+        "nom"
+    } else {
+        "nix"
+    }
+    .to_owned()
+}
+
 // This command is used to run the virtual machine of a particular system
 // WARNING: currently is just shelling out. In future we need to valide if
 // the system is in the flake or not
@@ -22,7 +52,7 @@ pub fn run_vm(flake_path: &Path, system: &str) -> Result<(), Report> {
     let flake_target = format!("nixosConfigurations.{system}.config.formats.vm",);
     #[cfg(target_arch = "aarch64")]
     let flake_target = format!("darwinConfigurations.{system}.config.formats.vm",);
-    let build_output = Command::new("nix")
+    let build_output = Command::new(nom_or_nix())
         .args(["build", "-f", &flake_path, &flake_target])
         .stderr(io::stderr())
         .stdout(io::stdout())
@@ -63,7 +93,7 @@ pub fn build_hosts(
         } else {
             format!("nixosConfigurations.{host}.config.system.build.toplevel")
         };
-        let output = Command::new("nix")
+        let output = Command::new(nom_or_nix())
             .args(["build", "--json", "--no-link", "-f", flake_path, &system])
             .envs(&env)
             .stdout(Stdio::piped())
