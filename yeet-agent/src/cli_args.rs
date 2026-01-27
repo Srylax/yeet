@@ -145,7 +145,8 @@ pub enum Commands {
         #[arg(long, default_value_t = false)]
         force: bool,
     },
-
+    /// Attach your system to the server
+    Attach,
     /// Query the status of all hosts
     Hosts {
         /// Filter for some hosts

@@ -5,6 +5,7 @@ use std::{
 
 use api::AgentAction;
 use httpsig_hyper::prelude::SecretKey;
+use log::info;
 use nix::unistd::Group;
 use rootcause::{Report, compat::ReportAsError, prelude::ResultExt};
 use serde::{Deserialize, Serialize};
@@ -33,6 +34,7 @@ pub trait YeetProxy {
         version: api::StorePath,
         force: bool,
     ) -> zlink::Result<Result<(), YeetDaemonError>>;
+    async fn attach(&mut self) -> zlink::Result<Result<(), YeetDaemonError>>;
 }
 
 pub async fn client() -> Result<Connection<zlink::unix::Stream>, Error> {
@@ -73,6 +75,16 @@ pub async fn detach(version: api::StorePath, force: bool) -> Result<(), Error> {
         .map_err(|e| Error::DaemonError(e))
 }
 
+pub async fn attach() -> Result<(), Error> {
+    let mut client = client().await?;
+    client
+        .attach()
+        .await
+        .context("Could not communicate with the varlink daemon. Are you running the same version?")
+        .map_err(ReportAsError::from)?
+        .map_err(|e| Error::DaemonError(e))
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -85,7 +97,7 @@ pub enum Error {
 #[zlink(interface = "ch.yeetme.yeet")]
 pub enum YeetDaemonError {
     NoCurrentSystem,
-    /// Could not connect to the yeet-server in an operation where it is required
+    /// Could not connect to the yeet-server in an operation where a server connection is required
     NoConnectionToServer {
         report: String,
     },
@@ -234,9 +246,24 @@ where
             &api::DetachAction::DetachSelf,
         )
         .await?;
+        info!("System detached. Switching");
 
         // Switch to version
         agent::switch_to(&version);
+
+        info!("Switched to detached version");
+
+        Ok(())
+    }
+
+    pub async fn attach(&self) -> Result<(), YeetDaemonError> {
+        let _ = server::system::detach(
+            &self.config.server,
+            &self.key,
+            &api::DetachAction::AttachSelf,
+        )
+        .await?;
+        info!("System attached");
 
         Ok(())
     }

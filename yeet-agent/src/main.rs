@@ -75,6 +75,7 @@ async fn main() -> Result<(), Report> {
             darwin,
             path,
         } => cli::detach::detach(version, force, path, darwin).await?,
+        Commands::Attach => cli::detach::attach().await?,
         Commands::Approve { name, code, facter } => {
             cli::approve::approve(&config, facter, code, name).await?
         }

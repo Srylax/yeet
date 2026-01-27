@@ -1,6 +1,7 @@
 use crate::{nix, varlink::YeetDaemonError};
 use std::path::PathBuf;
 
+use log::info;
 use rootcause::{Report, bail, report};
 
 use crate::varlink;
@@ -11,6 +12,16 @@ pub async fn detach(
     path: PathBuf,
     darwin: bool,
 ) -> Result<(), Report> {
+    let confirm = inquire::Confirm::new(
+        "Are you sure you want to detach? This will leave your system in a detached state until you re-attach your system",
+    )
+    .with_default(true)
+    .prompt()?;
+    if !confirm {
+        info!("Aborting...");
+        return Ok(());
+    }
+
     let revision = match version {
         Some(version) => version,
         None => {
@@ -28,7 +39,9 @@ pub async fn detach(
 
     // The rest is error handling
     match varlink::detach(revision, force).await {
-        Ok(_) => {}
+        Ok(_) => {
+            info!("Detached successfully")
+        }
         Err(varlink::Error::Report(report)) => {
             return Err(report.into());
         }
@@ -58,5 +71,16 @@ pub async fn detach(
             YeetDaemonError::NoCurrentSystem => unreachable!(),
         },
     }
+    Ok(())
+}
+
+pub async fn attach() -> Result<(), Report> {
+    let confirm = inquire::Confirm::new("Are you sure you want to attach to the server? This will switch to the server specified version").with_default(false).prompt()?;
+    if !confirm {
+        info!("Aborting...");
+        return Ok(());
+    }
+    varlink::attach().await?;
+    info!("Done, system is attached. Will switch to the server version in the next cycle");
     Ok(())
 }
