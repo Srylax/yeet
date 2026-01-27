@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use rootcause::{Report, bail, report};
 
-use crate::{cli_args::Config, varlink};
+use crate::varlink;
 
 pub async fn detach(
     version: Option<api::StorePath>,

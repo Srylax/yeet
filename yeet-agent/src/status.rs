@@ -64,7 +64,7 @@ impl Display for varlink::UpToDate {
 
 impl DisplaySection for YeetInfo {
     fn as_section(&self) -> Section {
-        let (up_to_date, mode, daemon_version) = match &self.daemon_status {
+        let (up_to_date, mode, daemon_version, detach_allowed) = match &self.daemon_status {
             Some(daemon_state) => {
                 let up_to_date = daemon_state.up_to_date.to_string();
                 let mode = format!(
@@ -72,11 +72,25 @@ impl DisplaySection for YeetInfo {
                     daemon_state.mode,
                     style(daemon_state.server.to_string()).underlined()
                 );
-                (up_to_date, mode, daemon_state.version.clone())
+
+                let detach_allowed = match daemon_state.detach_allowed {
+                    Some(true) => style("Yes").green(),
+                    Some(false) => style("No").red(),
+                    None => style("Unknown").red(),
+                }
+                .bold()
+                .to_string();
+
+                (
+                    up_to_date,
+                    mode,
+                    daemon_state.version.clone(),
+                    detach_allowed,
+                )
             }
             None => {
                 let no_con = style("No connection to daemon").red().bold().to_string();
-                (no_con.clone(), no_con.clone(), no_con)
+                (no_con.clone(), no_con.clone(), no_con.clone(), no_con)
             }
         };
 
@@ -90,6 +104,7 @@ impl DisplaySection for YeetInfo {
             style("Yeet:").underlined() => [
                 "Up to date", up_to_date,
                 "Mode", mode,
+                "Detach allowed", detach_allowed,
                 "Systemd Unit", self.systemd_status,
                 "Daemon version", daemon_version,
                 "CLI Version", format!("{}", self.cli_version_long),

@@ -112,7 +112,12 @@ pub fn list_hosts(flake_path: &str, darwin: bool) -> Result<Vec<String>, Report>
         ])
         .stdout(Stdio::piped())
         .spawn()?
-        .wait_with_output()?;
+        .wait_with_output()
+        .context("Could not find nix systems in the current dir")?;
+
+    if !output.status.success() {
+        bail!("Could not find nix systems in the current dir");
+    }
 
     Ok(serde_json::from_slice(&output.stdout)?)
 }

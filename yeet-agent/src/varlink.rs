@@ -48,7 +48,7 @@ pub async fn status() -> Result<DaemonStatus, Error> {
     client
         .status()
         .await
-        .context("Could not communicate with the varlink daemon")
+        .context("Could not communicate with the varlink daemon. Are you running the same version?")
         .map_err(ReportAsError::from)?
         .map_err(|e| Error::DaemonError(e))
 }
@@ -58,7 +58,7 @@ pub async fn config() -> Result<AgentConfig, Error> {
     Ok(client
         .config()
         .await
-        .context("Could not communicate with the varlink daemon")
+        .context("Could not communicate with the varlink daemon. Are you running the same version?")
         .map_err(ReportAsError::from)?
         .expect("Config can never Error because it does not return a result"))
 }
@@ -68,7 +68,7 @@ pub async fn detach(version: api::StorePath, force: bool) -> Result<(), Error> {
     client
         .detach(version, force)
         .await
-        .context("Could not communicate with the varlink daemon")
+        .context("Could not communicate with the varlink daemon. Are you running the same version?")
         .map_err(ReportAsError::from)?
         .map_err(|e| Error::DaemonError(e))
 }
@@ -179,11 +179,16 @@ where
             }
         };
 
+        let detach_allowed = server::system::detach_permission(&self.config.server, &self.key)
+            .await
+            .ok();
+
         Ok(DaemonStatus {
             up_to_date,
             server: self.config.server.clone(),
             mode,
             version: String::from(build::PKG_VERSION),
+            detach_allowed,
         })
     }
 
@@ -269,6 +274,7 @@ pub struct DaemonStatus {
     pub server: Url,
     pub mode: DaemonMode,
     pub version: String,
+    pub detach_allowed: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
